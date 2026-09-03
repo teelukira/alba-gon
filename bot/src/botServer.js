@@ -1,3 +1,6 @@
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const express = require('express');
 const cors = require('cors');
 const { runPlaywrightOrder } = require('./playwrightOrder');
@@ -6,7 +9,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const PORT = 3001;
+const PORT = process.env.BOT_PORT || 3001;
 
 // 헬스체크
 app.get('/api/health', (req, res) => {
@@ -15,16 +18,21 @@ app.get('/api/health', (req, res) => {
 
 // 유앤미24 실제 브라우저 자동 발주 API
 app.post('/api/order', async (req, res) => {
-  const { credentials, items } = req.body;
+  const { credentials, items } = req.body || {};
 
-  if (!credentials || !credentials.id || !credentials.pw) {
-    return res.status(400).json({ error: '유앤미24 아이디와 비밀번호가 필요합니다.' });
+  const id = credentials?.id || process.env.YOUNME_USER_ID;
+  const pw = credentials?.pw || process.env.YOUNME_PASSWORD;
+
+  if (!id || !pw || pw.includes('실제_비밀번호_입력')) {
+    return res.status(400).json({
+      error: '유앤미24 계정 정보가 없습니다. .env 파일에 실제 비밀번호를 입력해주세요.',
+    });
   }
 
-  console.log(`[봇] 발주 시작 요청 접수: 아이디=${credentials.id}, 품목 수=${items?.length || 0}`);
+  console.log(`[봇] 발주 시작 요청 접수: 아이디=${id}, 품목 수=${items?.length || 0}`);
 
   try {
-    const result = await runPlaywrightOrder(credentials, items || []);
+    const result = await runPlaywrightOrder({ id, pw }, items || []);
     res.json({
       successCount: result.successCount,
       failures: result.failures,
