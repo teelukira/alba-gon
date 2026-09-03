@@ -66,7 +66,7 @@
   },
   {
     "id": "audit_6",
-    "barcode": "8804645006104",
+    "barcode": "manual_6",
     "productName": "(1+1)맥널티]복숭아아이스티제로펫500ml-50%할인",
     "stockCount": 0,
     "targetStock": 24,
@@ -378,7 +378,7 @@
   },
   {
     "id": "audit_30",
-    "barcode": "8809103877586",
+    "barcode": "manual_30",
     "productName": "(2+1)케이앤]JK과산화수소150ml-33%할인",
     "stockCount": 0,
     "targetStock": 3,
@@ -573,7 +573,7 @@
   },
   {
     "id": "audit_45",
-    "barcode": "8809016360083",
+    "barcode": "manual_45",
     "productName": "(1+1)LG]쏘피BF귀애랑울중4P생리대-50%할인",
     "stockCount": 0,
     "targetStock": 2,
@@ -612,7 +612,7 @@
   },
   {
     "id": "audit_48",
-    "barcode": "8809659911734",
+    "barcode": "manual_48",
     "productName": "(1+1)고독한미식가]리얼쥐포튀김50g-50%할인",
     "stockCount": 0,
     "targetStock": 2,
@@ -807,7 +807,7 @@
   },
   {
     "id": "audit_63",
-    "barcode": "8809821802549",
+    "barcode": "manual_63",
     "productName": "(2+1)스낵24]스윗트위스트과자46g-33%할인",
     "stockCount": 0,
     "targetStock": 3,
@@ -820,7 +820,7 @@
   },
   {
     "id": "audit_64",
-    "barcode": "8809821802556",
+    "barcode": "manual_64",
     "productName": "(2+1)스낵24]어니언칩볶은양파맛22g-33%할인",
     "stockCount": 0,
     "targetStock": 3,

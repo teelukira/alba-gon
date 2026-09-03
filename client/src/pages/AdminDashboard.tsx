@@ -91,15 +91,22 @@ export const AdminDashboard: React.FC = () => {
   // 발주 대상 품목 계산 (핵심: 최소 발주수량의 배수로만 주문!)
   const orderItems: OrderItem[] = audits.map((audit) => {
     const { product, alias } = storageService.findProduct(audit.barcode);
-    const targetStock = product ? product.targetStock : (audit.targetStock || 10);
-    const minOrderQty = product ? Math.max(1, product.minOrderQty) : Math.max(1, audit.minOrderQty || 1);
+    // ★ audit에 명시된 targetStock이 있으면 최우선 적용!
+    const targetStock = audit.targetStock !== undefined
+      ? audit.targetStock
+      : (product ? product.targetStock : 10);
+
+    // ★ audit에 명시된 minOrderQty가 있으면 최우선 적용!
+    const minOrderQty = audit.minOrderQty !== undefined
+      ? Math.max(1, audit.minOrderQty)
+      : (product ? Math.max(1, product.minOrderQty) : 1);
 
     // 부족분 계산 (목표 안전재고 - 실사재고)
     const shortage = Math.max(0, targetStock - audit.stockCount);
 
-    // ★ 0보다 크면 반드시 최소 발주수량(minOrderQty)의 '배수'로 올림 계산!
+    // ★ 0보다 크면 최소 발주수량(minOrderQty)의 '배수'로 올림 계산!
     const recommendedQty = shortage > 0
-      ? Math.ceil(shortage / minOrderQty) * minOrderQty
+      ? (shortage % minOrderQty === 0 ? shortage : Math.ceil(shortage / minOrderQty) * minOrderQty)
       : 0;
 
     // 사장님이 직접 수정한 수량이 있으면 사용, 없으면 추천 수량
