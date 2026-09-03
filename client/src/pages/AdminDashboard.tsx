@@ -111,6 +111,12 @@ export const AdminDashboard: React.FC = () => {
     loadData();
   };
 
+  // 사장님 요청: 발주 리스트에서 특정 상품 즉시 제외/삭제
+  const handleRemoveFromOrder = (barcode: string) => {
+    storageService.deleteAudit(barcode);
+    loadData();
+  };
+
   // 유앤미24 자동 발주 실행
   const handleStartOrder = async () => {
     if (itemsToOrder.length === 0) {
@@ -411,6 +417,7 @@ export const AdminDashboard: React.FC = () => {
                   <th className="p-3.5 text-center">최소 발주단위</th>
                   <th className="p-3.5 text-center">추천 수량</th>
                   <th className="p-3.5 text-right">최종 발주 수량</th>
+                  <th className="p-3.5 text-center">발주제외</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
@@ -527,6 +534,18 @@ export const AdminDashboard: React.FC = () => {
                           <span className="text-slate-400 text-xs">개</span>
                         </div>
                       </div>
+                    </td>
+
+                    {/* 사장님 요청: 발주 리스트에서 특정 상품 즉시 제외/삭제 */}
+                    <td className="p-3.5 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFromOrder(item.barcode)}
+                        className="p-2 rounded-xl bg-slate-800 hover:bg-rose-950/70 text-slate-500 hover:text-rose-400 active:bg-rose-900 border border-slate-700/60 transition-colors"
+                        title="이번 발주 목록에서 제외 (삭제)"
+                      >
+                        <Trash2 className="w-4 h-4 text-rose-400" />
+                      </button>
                     </td>
                   </tr>
                 ))}

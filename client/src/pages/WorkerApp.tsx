@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BarcodeScanner } from '../components/BarcodeScanner';
 import { QuantityModal } from '../components/QuantityModal';
 import { PhotoCaptureModal } from '../components/PhotoCaptureModal';
@@ -79,10 +79,8 @@ export const WorkerApp: React.FC = () => {
   };
 
   const handleDeleteAudit = (id: string) => {
-    if (confirm('이 실사 기록을 삭제하시겠습니까?')) {
-      storageService.deleteAudit(id);
-      setAudits(storageService.getAudits());
-    }
+    storageService.deleteAudit(id);
+    setAudits(storageService.getAudits());
   };
 
   const unmappedCount = audits.filter(a => a.isUnmapped).length;
@@ -166,11 +164,15 @@ export const WorkerApp: React.FC = () => {
                     {item.stockCount}개
                   </span>
                   <button
-                    onClick={() => handleDeleteAudit(item.id)}
-                    className="text-slate-600 hover:text-rose-400 p-1"
-                    title="삭제"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteAudit(item.id);
+                    }}
+                    className="p-2.5 rounded-xl bg-slate-800 hover:bg-rose-950/60 active:bg-rose-900 text-slate-400 hover:text-rose-300 transition-colors border border-slate-700/60"
+                    title="실사 기록 삭제"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-4 h-4 text-rose-400" />
                   </button>
                 </div>
               </div>

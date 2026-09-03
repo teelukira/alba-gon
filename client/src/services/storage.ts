@@ -108,8 +108,8 @@ export const storageService = {
     return updatedItem;
   },
 
-  deleteAudit(id: string): void {
-    const audits = this.getAudits().filter(a => a.id !== id);
+  deleteAudit(identifier: string): void {
+    const audits = this.getAudits().filter(a => a.id !== identifier && a.barcode !== identifier);
     localStorage.setItem(KEYS.AUDITS, JSON.stringify(audits));
   },
 
