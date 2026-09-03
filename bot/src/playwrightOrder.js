@@ -1,4 +1,4 @@
-﻿const { chromium } = require('playwright');
+const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 
@@ -49,53 +49,34 @@ async function runPlaywrightOrder(credentials, items) {
     console.log('[봇] 로그인 완료! 주문 페이지 이동 중...');
     await page.waitForTimeout(1000);
 
-    // 3. 발주 품목 순회
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const targetBarcode = item.usingAliasBarcode || item.barcode;
+    // 3. 상온 상품과 저온 상품 분리
+    const ambientItems = items.filter(i => !i.category?.includes('냉동') && !i.category?.includes('저온'));
+    const chilledItems = items.filter(i => i.category?.includes('냉동') || i.category?.includes('저온'));
 
-      console.log(`\n[${i + 1}/${items.length}] 발주 처리 중: "${item.productName}" (바코드: ${targetBarcode})`);
+    console.log(`[봇] 발주 품목 분류: 상온 상품 ${ambientItems.length}개 / 저온냉장 상품 ${chilledItems.length}개`);
 
-      // 최소 발주량 체크
-      if (item.finalOrderQty < item.minOrderQty) {
-        console.warn(`  ❌ 최소 발주량 미달: 요청 ${item.finalOrderQty}개 / 최소 ${item.minOrderQty}개 필요`);
-        failures.push({
-          id: `fail_${Date.now()}_${item.barcode}`,
-          barcode: item.barcode,
-          productName: item.productName,
-          failReason: 'BELOW_MIN_QTY',
-          failDetail: `최소 발주량 미달 (요청: ${item.finalOrderQty}개 / 최소: ${item.minOrderQty}개)`,
-          attemptedQty: item.finalOrderQty,
-          minOrderQty: item.minOrderQty,
-          failedAt: new Date().toLocaleTimeString('ko-KR'),
-        });
-        continue;
-      }
+    // --- 헬퍼 함수: 단일 배치 주문 실행 ---
+    async function processBatch(batchItems, orderUrl, cartUrl, batchName) {
+      if (batchItems.length === 0) return;
 
-      // 품목 성격에 따라 상온(/app1/app.asp) 또는 저온(/app3/app.asp) 선택
-      const isChilled = item.category?.includes('냉동') || item.category?.includes('저온');
-      const orderUrl = isChilled ? 'http://www.younme24.com/app3/app.asp' : 'http://www.younme24.com/app1/app.asp';
-
+      console.log(`\n================ [${batchName} 발주 세션 시작 (${batchItems.length}건)] ================`);
       await page.goto(orderUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(800);
 
-      // 검색창에 바코드 입력 후 검색
-      const searchInput = await page.$('input[name="search_word"], input[name="keyword"], input[type="text"]');
-      if (searchInput) {
-        await searchInput.fill(targetBarcode);
-        await page.keyboard.press('Enter');
-        await page.waitForTimeout(1000);
+      for (let i = 0; i < batchItems.length; i++) {
+        const item = batchItems[i];
+        const targetBarcode = item.usingAliasBarcode || item.barcode;
 
-        // 검색 결과 확인
-        const pageContent = await page.content();
-        if (pageContent.includes('자료가 없습니다') || pageContent.includes('검색 결과가 없습니다') || pageContent.includes('품절')) {
-          console.warn(`  ❌ 상품 검색 불가 또는 품절: ${targetBarcode}`);
+        console.log(`[${batchName} ${i + 1}/${batchItems.length}] "${item.productName}" (바코드: ${targetBarcode})`);
+
+        if (item.finalOrderQty < item.minOrderQty) {
+          console.warn(`  ❌ 최소 발주량 미달: 요청 ${item.finalOrderQty}개 / 최소 ${item.minOrderQty}개`);
           failures.push({
             id: `fail_${Date.now()}_${item.barcode}`,
             barcode: item.barcode,
             productName: item.productName,
-            failReason: 'DISCONTINUED',
-            failDetail: '유앤미24 검색 결과 없음 또는 품절 (신규 바코드 매핑 필요)',
+            failReason: 'BELOW_MIN_QTY',
+            failDetail: `최소 발주량 미달 (요청: ${item.finalOrderQty}개 / 최소: ${item.minOrderQty}개)`,
             attemptedQty: item.finalOrderQty,
             minOrderQty: item.minOrderQty,
             failedAt: new Date().toLocaleTimeString('ko-KR'),
@@ -103,28 +84,58 @@ async function runPlaywrightOrder(credentials, items) {
           continue;
         }
 
-        // 수량 입력 필드 찾기
-        const qtyInput = await page.$('input[name="order_qty"], input[name="ea"], input.inputbox');
-        if (qtyInput) {
-          await qtyInput.fill(String(item.finalOrderQty));
-          // 장바구니 담기 버튼 클릭
-          const cartBtn = await page.$('button:has-text("담기"), input[value*="담기"], a:has-text("담기")');
-          if (cartBtn) {
-            await cartBtn.click();
-            await page.waitForTimeout(800);
+        // 검색창에 바코드 입력 후 검색
+        const searchInput = await page.$('input[name="search_word"], input[name="keyword"], input[type="text"]');
+        if (searchInput) {
+          await searchInput.fill(targetBarcode);
+          await page.keyboard.press('Enter');
+          await page.waitForTimeout(1000);
+
+          const content = await page.content();
+          if (content.includes('자료가 없습니다') || content.includes('검색 결과가 없습니다') || content.includes('품절')) {
+            console.warn(`  ❌ 검색 불가 또는 품절: ${targetBarcode}`);
+            failures.push({
+              id: `fail_${Date.now()}_${item.barcode}`,
+              barcode: item.barcode,
+              productName: item.productName,
+              failReason: 'DISCONTINUED',
+              failDetail: '유앤미24 검색 결과 없음 또는 품절 (신규 바코드 매핑 필요)',
+              attemptedQty: item.finalOrderQty,
+              minOrderQty: item.minOrderQty,
+              failedAt: new Date().toLocaleTimeString('ko-KR'),
+            });
+            continue;
           }
+
+          const qtyInput = await page.$('input[name="order_qty"], input[name="ea"], input.inputbox');
+          if (qtyInput) {
+            await qtyInput.fill(String(item.finalOrderQty));
+            const cartBtn = await page.$('button:has-text("담기"), input[value*="담기"], a:has-text("담기")');
+            if (cartBtn) {
+              await cartBtn.click();
+              await page.waitForTimeout(600);
+            }
+          }
+          successCount++;
+          console.log(`  ✅ ${batchName} 장바구니 담기 성공: ${item.finalOrderQty}개`);
         }
-        successCount++;
-        console.log(`  ✅ 장바구니 담기 성공: ${item.finalOrderQty}개`);
-      } else {
-        successCount++;
       }
+
+      // 장바구니 페이지 이동
+      console.log(`[봇] ${batchName} 장바구니 확인 중...`);
+      await page.goto(cartUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+      await page.waitForTimeout(1500);
     }
 
-    // 4. 발주 완료 후 장바구니 페이지로 이동하여 사장님이 확인 가능하도록 함
-    console.log('\n[봇] 전체 발주 처리 완료! 최종 장바구니 페이지로 이동합니다.');
-    await page.goto('http://www.younme24.com/app1/cart.asp', { waitUntil: 'domcontentloaded' }).catch(() => {});
-    await page.waitForTimeout(2000);
+    // 1단계: 상온 상품 발주 진행 (/app1/app.asp)
+    if (ambientItems.length > 0) {
+      await processBatch(ambientItems, 'http://www.younme24.com/app1/app.asp', 'http://www.younme24.com/app1/cart.asp', '상온상품');
+    }
+
+    // 2단계: 저온냉장 상품 발주 진행 (/app3/app.asp)
+    if (chilledItems.length > 0) {
+      await processBatch(chilledItems, 'http://www.younme24.com/app3/app.asp', 'http://www.younme24.com/app3/cart.asp', '저온냉장상품');
+    }
 
   } catch (err) {
     console.error('[봇] 자동 발주 실행 중 오류 발생:', err.message);

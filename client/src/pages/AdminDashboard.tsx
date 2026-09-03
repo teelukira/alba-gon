@@ -55,11 +55,13 @@ export const AdminDashboard: React.FC = () => {
     loadData();
   }, []);
 
+  const [tempFilter, setTempFilter] = useState<'ALL' | 'AMBIENT' | 'CHILLED'>('ALL');
+
   // 발주 대상 품목 계산
   const orderItems: OrderItem[] = audits.map((audit) => {
     const { product, alias } = storageService.findProduct(audit.barcode);
     const targetStock = product ? product.targetStock : 10;
-    const minOrderQty = product ? product.minOrderQty : 10;
+    const minOrderQty = product ? product.minOrderQty : 1;
     const recommendedQty = Math.max(0, targetStock - audit.stockCount);
 
     // 사장님이 직접 수정한 수량이 있으면 사용, 없으면 추천 수량
@@ -79,6 +81,7 @@ export const AdminDashboard: React.FC = () => {
       minOrderQty,
       isBelowMinQty,
       usingAliasBarcode: alias?.newBarcode,
+      category: product ? product.category : '기타',
       status: 'PENDING',
     };
   });
@@ -162,11 +165,18 @@ export const AdminDashboard: React.FC = () => {
   // 미등록 상품 수
   const unmappedAudits = audits.filter((a) => a.isUnmapped);
 
-  const filteredItems = orderItems.filter(
-    (item) =>
+  const filteredItems = orderItems.filter((item) => {
+    const matchesSearch =
       item.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.barcode.includes(searchQuery)
-  );
+      item.barcode.includes(searchQuery);
+
+    const isChilled = Boolean(item.category?.includes('냉동') || item.category?.includes('저온'));
+    let matchesTemp = true;
+    if (tempFilter === 'AMBIENT') matchesTemp = !isChilled;
+    if (tempFilter === 'CHILLED') matchesTemp = isChilled;
+
+    return matchesSearch && matchesTemp;
+  });
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6 pb-24">
@@ -337,14 +347,43 @@ export const AdminDashboard: React.FC = () => {
 
       {/* 4. 재고 실사 및 발주 추천 테이블 */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-lg">
-        <div className="p-4 bg-slate-950 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center space-x-2">
-            <Package className="w-5 h-5 text-slate-400" />
-            <h3 className="font-bold text-sm text-white">매장 실사 재고 & 발주 추천 목록</h3>
-            <span className="text-xs text-slate-500">({orderItems.length}개 품목)</span>
+        <div className="p-4 bg-slate-950 border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex items-center space-x-2">
+              <Package className="w-5 h-5 text-slate-400" />
+              <h3 className="font-bold text-sm text-white">매장 실사 재고 & 발주 목록</h3>
+            </div>
+
+            {/* 유앤미24 상온/저온 전용 발주 탭 */}
+            <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
+              <button
+                onClick={() => setTempFilter('ALL')}
+                className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                  tempFilter === 'ALL' ? 'bg-blue-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                전체 ({orderItems.length})
+              </button>
+              <button
+                onClick={() => setTempFilter('AMBIENT')}
+                className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                  tempFilter === 'AMBIENT' ? 'bg-amber-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                상온상품 (/app1/)
+              </button>
+              <button
+                onClick={() => setTempFilter('CHILLED')}
+                className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                  tempFilter === 'CHILLED' ? 'bg-cyan-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                저온냉장 (/app3/)
+              </button>
+            </div>
           </div>
 
-          <div className="relative w-full sm:w-64">
+          <div className="relative w-full md:w-60">
             <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
             <input
               type="text"

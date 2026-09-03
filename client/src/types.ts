@@ -1,4 +1,4 @@
-﻿export interface Product {
+export interface Product {
   barcode: string;
   name: string;
   price: number;
@@ -42,6 +42,7 @@ export interface OrderItem {
   minOrderQty: number;
   isBelowMinQty: boolean;
   usingAliasBarcode?: string; // 대체 바코드로 변경된 경우
+  category?: string;          // 저온/상온 여부
   status: 'PENDING' | 'ORDERED' | 'FAILED';
   failReason?: string;
 }
