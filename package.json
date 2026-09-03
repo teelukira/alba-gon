@@ -1,0 +1,12 @@
+{
+  "name": "alba-gon",
+  "version": "1.0.0",
+  "private": true,
+  "description": "편의점 알바용 바코드 실사 & 유앤미24 자동 발주 시스템",
+  "scripts": {
+    "dev": "npm --prefix client run dev",
+    "build": "npm --prefix client run build",
+    "bot": "npm --prefix bot start",
+    "deploy": "npm --prefix client run build && npx surge client/dist --domain alba-gon-pos.surge.sh"
+  }
+}
