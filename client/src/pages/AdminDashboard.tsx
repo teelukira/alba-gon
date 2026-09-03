@@ -124,8 +124,14 @@ export const AdminDashboard: React.FC = () => {
       return;
     }
 
+    let hasBot = false;
+    try {
+      const ping = await fetch('http://localhost:3001/api/health');
+      if (ping.ok) hasBot = true;
+    } catch {}
+
     const settings = storageService.getSettings();
-    if (!settings.younmeId || !settings.younmePw) {
+    if (!hasBot && (!settings.younmeId || !settings.younmePw)) {
       alert('유앤미24 아이디와 비밀번호가 비어있습니다. 우측 상단 톱니바퀴 설정에서 계정을 먼저 입력해주세요!');
       return;
     }
