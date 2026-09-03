@@ -79,6 +79,28 @@ export const storageService = {
     return { product, alias };
   },
 
+  // 사장님 요청: 바코드 마지막 4~5자리 빠른 패턴 매칭 및 상품명 검색
+  searchProductsByPattern(query: string, maxResults = 10): Product[] {
+    const q = query.trim().toLowerCase();
+    if (!q || q.length < 2) return [];
+
+    const products = this.getProducts();
+
+    // 1. 바코드 끝자리(Tail) 정확히 일치하는 상품 (가장 높은 우선순위: 예: 60205 로 끝나는 포카칩)
+    const tailMatches = products.filter(p => p.barcode.endsWith(q));
+
+    // 2. 바코드 중간에 포함되는 상품
+    const barcodeMatches = products.filter(p => !p.barcode.endsWith(q) && p.barcode.includes(q));
+
+    // 3. 상품명에 검색어가 포함되는 상품 (한글/영문)
+    const nameMatches = products.filter(p => 
+      !p.barcode.includes(q) && p.name.toLowerCase().includes(q)
+    );
+
+    // 우선순위 순서대로 합치고 최대 결과 개수 반환
+    return [...tailMatches, ...barcodeMatches, ...nameMatches].slice(0, maxResults);
+  },
+
   // --- 재고 실사 (Audits) ---
   getAudits(): AuditItem[] {
     try {

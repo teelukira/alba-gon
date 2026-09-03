@@ -1,4 +1,4 @@
-﻿import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Camera, AlertCircle, Check, X, RefreshCw, Upload } from 'lucide-react';
 import { soundManager } from '../services/sound';
 
@@ -87,8 +87,8 @@ export const PhotoCaptureModal: React.FC<PhotoCaptureModalProps> = ({
           <div className="flex items-center space-x-2 text-amber-400">
             <AlertCircle className="w-5 h-5 shrink-0" />
             <div>
-              <h3 className="font-bold text-sm">미등록 신상품 발견!</h3>
-              <p className="text-[11px] text-amber-300/80 font-mono">{barcode}</p>
+              <h3 className="font-bold text-sm">조회되지 않는 미등록 바코드</h3>
+              <p className="text-[11px] text-amber-300 font-mono">바코드: {barcode}</p>
             </div>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-white p-1">
@@ -97,7 +97,7 @@ export const PhotoCaptureModal: React.FC<PhotoCaptureModalProps> = ({
         </div>
 
         <p className="text-xs text-slate-300 mb-3 leading-relaxed">
-          사장님이 상품명을 확인할 수 있도록 <strong className="text-white">상품 앞면(이름)</strong> 사진을 1장 찍어주세요!
+          마스터 목록에 없는 상품입니다. 사장님이 확인 후 매핑하실 수 있도록 <strong className="text-emerald-400">상품 앞면(이름/실물)</strong> 사진을 촬영해주세요!
         </p>
 
         {/* 촬영 뷰파인더 또는 촬영된 사진 미리보기 */}
