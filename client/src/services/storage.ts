@@ -1,5 +1,6 @@
 import { Product, AuditItem, BarcodeAlias, OrderFailure, AppSettings } from '../types';
 import seedProducts from '../data/seedProducts.json';
+import seedAudits from '../data/seedAudits.json';
 import * as XLSX from 'xlsx';
 
 const KEYS = {
@@ -51,20 +52,34 @@ export const storageService = {
   },
 
   updateProductMinOrderQty(barcode: string, minOrderQty: number): void {
+    const safeVal = Math.max(1, minOrderQty);
     const list = this.getProducts();
     const idx = list.findIndex(p => p.barcode === barcode);
     if (idx >= 0) {
-      list[idx].minOrderQty = Math.max(1, minOrderQty);
+      list[idx].minOrderQty = safeVal;
       this.saveProducts(list);
+    }
+    const audits = this.getAudits();
+    const aIdx = audits.findIndex(a => a.barcode === barcode);
+    if (aIdx >= 0) {
+      audits[aIdx].minOrderQty = safeVal;
+      this.saveAudits(audits);
     }
   },
 
   updateProductTargetStock(barcode: string, targetStock: number): void {
+    const safeVal = Math.max(0, targetStock);
     const list = this.getProducts();
     const idx = list.findIndex(p => p.barcode === barcode);
     if (idx >= 0) {
-      list[idx].targetStock = Math.max(1, targetStock);
+      list[idx].targetStock = safeVal;
       this.saveProducts(list);
+    }
+    const audits = this.getAudits();
+    const aIdx = audits.findIndex(a => a.barcode === barcode);
+    if (aIdx >= 0) {
+      audits[aIdx].targetStock = safeVal;
+      this.saveAudits(audits);
     }
   },
 
@@ -105,10 +120,20 @@ export const storageService = {
   getAudits(): AuditItem[] {
     try {
       const data = localStorage.getItem(KEYS.AUDITS);
-      return data ? JSON.parse(data) : [];
+      if (!data) {
+        // 최초 접속 시 사장님이 작업하신 65건 실사 품목 기본 탑재!
+        const initial = (seedAudits as unknown as AuditItem[]) || [];
+        localStorage.setItem(KEYS.AUDITS, JSON.stringify(initial));
+        return initial;
+      }
+      return JSON.parse(data);
     } catch {
-      return [];
+      return (seedAudits as unknown as AuditItem[]) || [];
     }
+  },
+
+  saveAudits(audits: AuditItem[]): void {
+    localStorage.setItem(KEYS.AUDITS, JSON.stringify(audits));
   },
 
   saveAudit(item: Omit<AuditItem, 'id' | 'updatedAt'>): AuditItem {

@@ -1,0 +1,783 @@
+
+
+<HTML><HEAD>
+<title>Contents</title>
+<meta http-equiv="Content-Type" content="text/html"; charset="euc-kr">
+
+<LINK REL=STYLESHEET TYPE='text/css' HREF='/lib/style_app.css?05'>
+<script type="text/javascript" language="javascript" src="/lib/global.js?20180403"></script>
+<script language="JavaScript">
+<!--
+
+function cart_add(product_code,count,unit,price,cHour,cMin,cWeek,time_check,cs,valid,product_name) {
+
+  if (valid == "1") {
+      alert ("선택하신 상품은 품절되었습니다.\n다른 상품을 선택해주세요");
+      return;
+  }
+  if (valid == "d") {
+      alert ("선택하신 상품은 해당요일에 배송이 없습니다.\n다른 요일에 주문하셔야 합니다.");
+      return;
+  }
+  if (valid == "h") {
+      alert ("2013년 8월3일과 8월5일은 휴무일입니다.\n의약품,아이스크림과 저온냉장상품 페이지에서 저온냉장상품만 주문 가능합니다.");
+      return;
+  }
+  if (valid == "a") {
+      alert ("의약품은 배송일 기준 월요일,화요일만 가능합니다.\n다른 상품을 선택해주세요");
+      return;
+  }
+  if (valid == "j") {
+      alert ("담배 소매인지정서 발송하신 후 발주가능합니다.\n(소매인지정서 발송은 거래명세표에 있는 \n관리담당 휴대폰으로 전송해주시면 됩니다.)");
+      return;
+  }
+
+
+  if (document.form1.orderMaxQty[count].value > "0") {
+	   if (parseInt(document.form1.orderMaxQty[count].value,10) < parseInt(document.form1.quantity[count].value,10)){
+		    alert("최대 주문수량은 " + document.form1.orderMaxQty[count].value + "개 입니다.\n확인 후 다시 선택해주세요.");
+				document.form1.quantity[count].selectedIndex = 0;
+				return;
+		 }
+	}
+  if (document.form1.expiringDate[count].value > "") {
+		alert("선택하신 제품은 유통기한 임박한 제품으로\n행사 중이니 신중히 발주해 주시기 바랍니다.");
+  }
+  parent.cart.location.href = "orderAdd.asp?order_dev=j&dev=" + cs + "&order_type=1&pcode=" + product_code + "&quantity=" + document.form1.quantity[count].value + "&unit=" + unit + "&price=" + price + "&order_date=" + parent.form1.order_date.value + "&product_name=" + escape(product_name.replace('+','***')) + "&valid=" + valid;
+}
+function data_view(code) {
+ var url = "/product/product_view.asp?pcode=" + code;
+ attr = "toolbar=0,resizable=yes,status=1,scrollbars=1,copyhistory=0,width=750,height=570";
+ Wnd = window.open(url, "data_view", attr);
+ Wnd.focus();
+}
+
+
+function check_quantity(product_code,price,count,order_unit,unit,unit_name,cs,order_unit_yn,valid,product_name) {
+
+  if (valid == "j") {
+      alert ("담배 소매인지정서 발송하신 후 발주가능합니다.\n(소매인지정서 발송은 거래명세표에 있는 \n관리담당 휴대폰으로 전송해주시면 됩니다.)");
+      return;
+  } else if ((valid != "y") && (valid != "t")){
+      alert ("선택하신 상품은 품절되었습니다.\n다른 상품을 선택해주세요");
+      return;
+  }
+
+  if (document.form1.quantity[count].value == 0) {
+     document.sform1.price.value = price;
+     document.sform1.product_code.value = product_code;
+     document.sform1.unit.value = unit; 
+     document.sform1.cs.value = cs; 
+     document.sform1.t_count.value = count;
+     document.sform1.t_order_unit.value = order_unit;
+     document.sform1.t_unit_name.value = unit_name;
+     document.sform1.t_unit_name2.value = unit_name;
+     document.sform1.order_unit_yn.value = order_unit_yn;
+     document.sform1.product_name.value = product_name;
+     document.sform1.valid.value = valid;
+     div_quantity.style.display="block";
+     document.sform1.t_quantity.focus();
+  }
+}
+
+function div_quantity_hide() {
+  div_quantity.style.display="none";
+}
+
+function set_quantity() {
+  var count =0 ;
+  var order_unit = 1;
+  var quantity = 1;
+  var product_code = "";
+  var cs = "";
+  //product_code =  document.sform1.product_code.value;
+  //cs =  document.sform1.cs.value;
+  count = document.sform1.t_count.value;
+  quantity = Number(document.sform1.t_quantity.value);
+  order_unit =  Number(document.sform1.t_order_unit.value);
+  order_unit_yn =  document.sform1.order_unit_yn.value;
+
+  if (quantity < 1) {
+     alert("주문수량을 입력해주세요");
+     document.sform1.t_quantity.value = "";
+     document.sform1.t_quantity.focus();
+     return; 
+  }
+  if (quantity < order_unit) {
+     alert("최소 주문수량 " + order_unit + " " + document.sform1.unit.value + " 이상 주문하셔야합니다");
+     document.sform1.t_quantity.value = "";
+     document.sform1.t_quantity.focus();
+     return; 
+  }
+  if ( (quantity % order_unit != 0) && (order_unit_yn == "y") ){
+     alert("주문수량을 " + order_unit + "의 배수로 입력을 해주세요.");
+     document.sform1.t_quantity.focus();
+     return; 
+  }
+  new_option = document.createElement("option");
+  new_option.value = quantity;
+  new_option.text = quantity;
+  document.form1.quantity[count].add(new_option);
+  document.form1.quantity[count].selectedIndex = document.form1.quantity[count].length-1;
+  
+  document.sform1.t_quantity.value = "";
+  div_quantity.style.display="none";
+  cart_add(document.sform1.product_code.value,count,document.sform1.unit.value,document.sform1.price.value,'23','39','7','',document.sform1.cs.value,document.sform1.valid.value,document.sform1.product_name.value);
+}
+
+function check_key_digit() {
+  if ( (event.keyCode > 47) && (event.keyCode < 58) || (event.keyCode == 46) )
+     event.returnValue = true;
+  else
+     event.returnValue = false;
+}
+
+//-->
+</script>
+
+</HEAD>
+
+<BODY bgcolor="#ffffff" topmargin="0" leftmargin="0" marginwidth="0" marginheight="0">
+
+
+
+<center>
+<!-- ### Global -->
+<table width="98%" cellpadding=0 cellspacing=0 border=0>
+ <tr>
+  <td>
+<!-- ### Global -->
+
+
+
+
+<table width="100%" height=35 border=0 cellpadding=0 cellspacing=0>
+ <tr>
+  <td align=center>
+
+
+<SCRIPT LANGUAGE="JavaScript">
+<!--
+
+function go_search(cl,code,name) {
+  document.search.submit();
+}
+
+function go_cate2(dev,c1,c2) {
+  location.href = "product_list.asp?order_type=1&order_date=20260905&ship_date1=&ship_date2=&dev=" + dev + "&c1=" + c1 + "&c2=" + c2;
+}
+
+function go_cate3(dev,c1,c2,c3) {
+  location.href = "product_list.asp?order_type=1&order_date=20260905&ship_date1=&ship_date2=&dev=" + dev + "&c1=" + c1 + "&c2=" + c2 + "&c3=" + c3;
+}
+
+function checkSelectStr(ObjSelect, strValue) {
+for (var intLoop = 0; intLoop < ObjSelect.length; intLoop++) {
+    if (ObjSelect.options[intLoop].value == strValue)
+       ObjSelect.options[intLoop].selected = true;
+    }    
+}
+
+function checkSearch(form){
+ if ((form.search_word2.value.length>0) && (form.search_word2.value.length<3)){
+		 alert('바코드 검색시 바코드는 3자리 이상 입력을 하셔야합니다.');
+		 form.search_word2.focus();
+		 return false;
+		 }
+  else  return true;
+}
+
+// -->
+</SCRIPT>
+
+<table width=100% cellpadding=0 cellspacing=0>
+<form name="search" method="post" action="product_list.asp" onSubmit="return checkSearch(this);">
+<input type="hidden" name="c1" value="" ID="Hidden2">
+<input type="hidden" name="c2" value="" ID="Hidden3">
+<input type="hidden" name="c3" value="" ID="Hidden9">
+<input type="hidden" name="c1_org" value="" ID="Hidden4">
+<input type="hidden" name="c2_org" value="" ID="Hidden5">
+<input type="hidden" name="c3_org" value="" ID="Hidden10">
+<input type="hidden" name="c1_name" value="" ID="Hidden6">
+<input type="hidden" name="c2_name" value="" ID="Hidden7">
+<input type="hidden" name="c3_name" value="" ID="Hidden11">
+<input type="hidden" name="dev" value="" ID="Hidden1">
+<input type="hidden" name="order_dev" value="j" ID="Hidden1">
+<input type="hidden" name="order_type" value="1" ID="Hidden8">
+<input type="hidden" name="order_date" value="20260905">
+<input type="hidden" name="ship_date1" value="">
+<input type="hidden" name="ship_date2" value="">
+<input type="hidden" name="time_check" value="">
+<input type="hidden" name="order_d1" value="">
+<input type="hidden" name="view_type" value="l">
+<input type="hidden" name="search_dev" value="product_name">
+<tr><td align=center>
+
+<table cellpadding=0 cellspacing=0 border=0>
+ <tr>
+  <td>
+   <img src="/app1/image/img_wpname.gif" align=absmiddle>    
+   <input type=text name="search_word" size=15 value="" class="inputbox" style="ime-mode:active">
+   <img src="/app1/image/img_wpcode.gif" align=absmiddle>  
+   <input type=text name="search_word2" size=15 value="" class="inputbox">
+   </td>
+   <td style="padding-left:5px;">
+    <input type="image" src="./image/img_bsearch.gif" style="cursor:hand"><br>
+   </td>
+   <td style="padding-left:5px;">
+
+   </td>
+ </tr>
+</table>
+
+<script language="javascript">
+<!--
+//  checkSelectStr(document.search.search_dev,'');
+// -->
+</script>
+
+  </td></tr>
+</form>
+</table>
+  
+  </td>
+ </tr>
+</table>
+
+<!-- 상품 리스트 //-->
+<table width=100% height=600 cellpadding=0 cellspacing=0 border=0 class="productBox02">
+ <tr>
+  <td valign=top>
+<table width=100% cellpadding=0 cellspacing=0 border=0 class="productList02">
+<form name="form1" method="post">
+<input type="hidden" name="quantity" value="">
+<input type="hidden" name="orderMaxQty" value="">
+<input type="hidden" name="expiringDate" value="">
+ <tr align=center>
+  <th align=center height=30>
+
+  </th>
+  <th>
+   품 &nbsp; 명<font color=#ff5000>(입수량)</font>단위
+  </th>
+  <th>
+   공급가
+  </th>
+  <th>
+   수량
+  </th>
+  <th>
+반품
+  </th>
+  <th>
+   주문
+  </th>
+ </tr>
+
+ <tr align=center>
+  <td height=35>
+
+   <a href="javascript:data_view('8809790730799')"><img src="http://image.cvslove.com/pds/product/s_8809790730799_01.jpg" width=35 height=35 border=0></a><br>
+
+  </td>
+  <td style="padding-left:10px;" align=left>
+<img src='/images/img_ievent.gif' align='absmiddle'><a href="javascript:data_view('8809790730799')">(2+1)이지텍]군고구마쫀득이35g(쫀드기)-33%할인</a><font color=#ff8000>(20)EA<br>
+<p class='pNameEtc'>9/30 점포 입고분까지 행사 적용</p>
+  </td>
+  <td>
+   <font color=#bb0000>650원
+  </td>
+  <td align=left>
+   <select name="quantity" class="opt_list" style="width:45px;" onChange="javascript:check_quantity('8809790730799','650','1','3','EA','<font color=#ff8000>(20)EA','j','y','y','(2+1)이지텍]군고구마쫀득이35g(쫀드기)-33%할인')">
+<option value='3'>3</option><option value='6'>6</option><option value='9'>9</option><option value='12'>12</option><option value='15'>15</option><option value='18'>18</option><option value='21'>21</option><option value='24'>24</option><option value='27'>27</option><option value='30'>30</option><option value='33'>33</option><option value='36'>36</option><option value='39'>39</option><option value='42'>42</option><option value='45'>45</option><option value='48'>48</option><option value='51'>51</option><option value='54'>54</option><option value='57'>57</option><option value='60'>60</option><option value='63'>63</option>   <option value="0">기타
+   </select>
+	 <input type="hidden" name="orderMaxQty" value="999">
+	 <input type="hidden" name="expiringDate" value="">
+  </td>
+  <td><font style="font-size:11px;letter-spacing:-1px"><font color=#ff0000> 무반품</td>
+  <td>
+   <a href="javascript:cart_add('8809790730799','1','EA','650','23','39','7','','j','y','(2+1)이지텍]군고구마쫀득이35g(쫀드기)-33%할인')" title="소비자가격:1,500원"><img src="./image/img_badd1.gif" border=0></a><br>
+  </td>
+ </tr>
+
+ <tr align=center>
+  <td height=35>
+
+   <a href="javascript:data_view('8802259034261')"><img src="http://image.cvslove.com/pds/product/s_8802259034261_01.jpg" width=35 height=35 border=0></a><br>
+
+  </td>
+  <td style="padding-left:10px;" align=left>
+<a href="javascript:data_view('8802259034261')">*롯데]카스타드우베라떼맛138g</a><font color=#ff8000>(12)EA<br>
+<p class='pNameEtc'>유통기한 6개월 이내</p>
+  </td>
+  <td>
+   <font color=#bb0000>2,380원
+  </td>
+  <td align=left>
+   <select name="quantity" class="opt_list" style="width:45px;" onChange="javascript:check_quantity('8802259034261','2380','2','1','EA','<font color=#ff8000>(12)EA','j','y','y','*롯데]카스타드우베라떼맛138g')">
+<option value='1'>1</option><option value='2'>2</option><option value='3'>3</option><option value='4'>4</option><option value='5'>5</option><option value='6'>6</option><option value='7'>7</option><option value='8'>8</option><option value='9'>9</option><option value='10'>10</option><option value='11'>11</option><option value='12'>12</option><option value='13'>13</option><option value='14'>14</option><option value='15'>15</option><option value='16'>16</option><option value='17'>17</option><option value='18'>18</option><option value='19'>19</option><option value='20'>20</option><option value='21'>21</option>   <option value="0">기타
+   </select>
+	 <input type="hidden" name="orderMaxQty" value="999">
+	 <input type="hidden" name="expiringDate" value="">
+  </td>
+  <td><font style="font-size:11px;letter-spacing:-1px"><font color=#ff0000> 무반품</td>
+  <td>
+   <a href="javascript:cart_add('8802259034261','2','EA','2380','23','39','7','','j','y','*롯데]카스타드우베라떼맛138g')" title="소비자가격:3,500원"><img src="./image/img_badd1.gif" border=0></a><br>
+  </td>
+ </tr>
+
+ <tr align=center>
+  <td height=35>
+
+   <a href="javascript:data_view('8801043031431')"><img src="http://image.cvslove.com/pds/product/s_8801043031431_01.jpg" width=35 height=35 border=0></a><br>
+
+  </td>
+  <td style="padding-left:10px;" align=left>
+<a href="javascript:data_view('8801043031431')">농심]쫄병스낵매콤맛82g(1200)</a><font color=#ff8000>(30)EA<br>
+
+  </td>
+  <td>
+   <font color=#bb0000>900원
+  </td>
+  <td align=left>
+   <select name="quantity" class="opt_list" style="width:45px;" onChange="javascript:check_quantity('8801043031431','900','3','5','EA','<font color=#ff8000>(30)EA','j','y','y','농심]쫄병스낵매콤맛82g(1200)')">
+<option value='5'>5</option><option value='10'>10</option><option value='15'>15</option><option value='20'>20</option><option value='25'>25</option><option value='30'>30</option><option value='35'>35</option><option value='40'>40</option><option value='45'>45</option><option value='50'>50</option><option value='55'>55</option><option value='60'>60</option><option value='65'>65</option><option value='70'>70</option><option value='75'>75</option><option value='80'>80</option><option value='85'>85</option><option value='90'>90</option><option value='95'>95</option><option value='100'>100</option><option value='105'>105</option>   <option value="0">기타
+   </select>
+	 <input type="hidden" name="orderMaxQty" value="999">
+	 <input type="hidden" name="expiringDate" value="">
+  </td>
+  <td><font style="font-size:11px;letter-spacing:-1px"><font color=#ff0000> 무반품</td>
+  <td>
+   <a href="javascript:cart_add('8801043031431','3','EA','900','23','39','7','','j','y','농심]쫄병스낵매콤맛82g(1200)')" title="소비자가격:1,200원"><img src="./image/img_badd1.gif" border=0></a><br>
+  </td>
+ </tr>
+
+ <tr align=center>
+  <td height=35>
+
+   <a href="javascript:data_view('8801117760205')"><img src="http://image.cvslove.com/pds/product/s_8801117760205_01.jpg" width=35 height=35 border=0></a><br>
+
+  </td>
+  <td style="padding-left:10px;" align=left>
+<a href="javascript:data_view('8801117760205')">오리온]포카칩오리지날137g(3400)</a><font color=#ff8000>(12)EA<br>
+
+  </td>
+  <td>
+   <font color=#bb0000>2,346원
+  </td>
+  <td align=left>
+   <select name="quantity" class="opt_list" style="width:45px;" onChange="javascript:check_quantity('8801117760205','2346','4','4','EA','<font color=#ff8000>(12)EA','j','y','y','오리온]포카칩오리지날137g(3400)')">
+<option value='4'>4</option><option value='8'>8</option><option value='12'>12</option><option value='16'>16</option><option value='20'>20</option><option value='24'>24</option><option value='28'>28</option><option value='32'>32</option><option value='36'>36</option><option value='40'>40</option><option value='44'>44</option><option value='48'>48</option><option value='52'>52</option><option value='56'>56</option><option value='60'>60</option><option value='64'>64</option><option value='68'>68</option><option value='72'>72</option><option value='76'>76</option><option value='80'>80</option><option value='84'>84</option>   <option value="0">기타
+   </select>
+	 <input type="hidden" name="orderMaxQty" value="999">
+	 <input type="hidden" name="expiringDate" value="">
+  </td>
+  <td><font style="font-size:11px;letter-spacing:-1px">반품가능</td>
+  <td>
+   <a href="javascript:cart_add('8801117760205','4','EA','2346','23','39','7','','j','y','오리온]포카칩오리지날137g(3400)')" title="소비자가격:3,400원"><img src="./image/img_badd1.gif" border=0></a><br>
+  </td>
+ </tr>
+
+ <tr align=center>
+  <td height=35>
+
+   <a href="javascript:data_view('8801043031196')"><img src="http://image.cvslove.com/pds/product/s_8801043031196_01.jpg" width=35 height=35 border=0></a><br>
+
+  </td>
+  <td style="padding-left:10px;" align=left>
+<a href="javascript:data_view('8801043031196')">농심]메론킥60g(1800)</a><font color=#ff8000>(16)EA<br>
+<p class='pNameEtc'>유통기한 6개월 이내</p>
+  </td>
+  <td>
+   <font color=#bb0000>1,350원
+  </td>
+  <td align=left>
+   <select name="quantity" class="opt_list" style="width:45px;" onChange="javascript:check_quantity('8801043031196','1350','5','4','EA','<font color=#ff8000>(16)EA','j','y','y','농심]메론킥60g(1800)')">
+<option value='4'>4</option><option value='8'>8</option><option value='12'>12</option><option value='16'>16</option><option value='20'>20</option><option value='24'>24</option><option value='28'>28</option><option value='32'>32</option><option value='36'>36</option><option value='40'>40</option><option value='44'>44</option><option value='48'>48</option><option value='52'>52</option><option value='56'>56</option><option value='60'>60</option><option value='64'>64</option><option value='68'>68</option><option value='72'>72</option><option value='76'>76</option><option value='80'>80</option><option value='84'>84</option>   <option value="0">기타
+   </select>
+	 <input type="hidden" name="orderMaxQty" value="999">
+	 <input type="hidden" name="expiringDate" value="">
+  </td>
+  <td><font style="font-size:11px;letter-spacing:-1px"><font color=#ff0000> 무반품</td>
+  <td>
+   <a href="javascript:cart_add('8801043031196','5','EA','1350','23','39','7','','j','y','농심]메론킥60g(1800)')" title="소비자가격:1,800원"><img src="./image/img_badd1.gif" border=0></a><br>
+  </td>
+ </tr>
+
+ <tr align=center>
+  <td height=35>
+
+   <a href="javascript:data_view('8801043031417')"><img src="http://image.cvslove.com/pds/product/s_8801043031417_01.jpg" width=35 height=35 border=0></a><br>
+
+  </td>
+  <td style="padding-left:10px;" align=left>
+<a href="javascript:data_view('8801043031417')">농심]쫄병스낵바베큐82g(1200)</a><font color=#ff8000>(30)EA<br>
+
+  </td>
+  <td>
+   <font color=#bb0000>900원
+  </td>
+  <td align=left>
+   <select name="quantity" class="opt_list" style="width:45px;" onChange="javascript:check_quantity('8801043031417','900','6','5','EA','<font color=#ff8000>(30)EA','j','y','y','농심]쫄병스낵바베큐82g(1200)')">
+<option value='5'>5</option><option value='10'>10</option><option value='15'>15</option><option value='20'>20</option><option value='25'>25</option><option value='30'>30</option><option value='35'>35</option><option value='40'>40</option><option value='45'>45</option><option value='50'>50</option><option value='55'>55</option><option value='60'>60</option><option value='65'>65</option><option value='70'>70</option><option value='75'>75</option><option value='80'>80</option><option value='85'>85</option><option value='90'>90</option><option value='95'>95</option><option value='100'>100</option><option value='105'>105</option>   <option value="0">기타
+   </select>
+	 <input type="hidden" name="orderMaxQty" value="999">
+	 <input type="hidden" name="expiringDate" value="">
+  </td>
+  <td><font style="font-size:11px;letter-spacing:-1px"><font color=#ff0000> 무반품</td>
+  <td>
+   <a href="javascript:cart_add('8801043031417','6','EA','900','23','39','7','','j','y','농심]쫄병스낵바베큐82g(1200)')" title="소비자가격:1,200원"><img src="./image/img_badd1.gif" border=0></a><br>
+  </td>
+ </tr>
+
+ <tr align=center>
+  <td height=35>
+
+   <a href="javascript:data_view('8809936010068')"><img src="http://image.cvslove.com/pds/product/s_8809936010068_01.jpg" width=35 height=35 border=0></a><br>
+
+  </td>
+  <td style="padding-left:10px;" align=left>
+<a href="javascript:data_view('8809936010068')">유어스]오모리김치볶음밥누룽지22g</a><font color=#ff8000>(160)EA<br>
+<p class='pNameEtc'>유통기한 1년</p>
+  </td>
+  <td>
+   <font color=#bb0000>1,388원
+  </td>
+  <td align=left>
+   <select name="quantity" class="opt_list" style="width:45px;" onChange="javascript:check_quantity('8809936010068','1388','7','10','EA','<font color=#ff8000>(160)EA','j','y','y','유어스]오모리김치볶음밥누룽지22g')">
+<option value='10'>10</option><option value='20'>20</option><option value='30'>30</option><option value='40'>40</option><option value='50'>50</option><option value='60'>60</option><option value='70'>70</option><option value='80'>80</option><option value='90'>90</option><option value='100'>100</option><option value='110'>110</option><option value='120'>120</option><option value='130'>130</option><option value='140'>140</option><option value='150'>150</option><option value='160'>160</option><option value='170'>170</option><option value='180'>180</option><option value='190'>190</option><option value='200'>200</option><option value='210'>210</option>   <option value="0">기타
+   </select>
+	 <input type="hidden" name="orderMaxQty" value="999">
+	 <input type="hidden" name="expiringDate" value="">
+  </td>
+  <td><font style="font-size:11px;letter-spacing:-1px"><font color=#ff0000> 무반품</td>
+  <td>
+   <a href="javascript:cart_add('8809936010068','7','EA','1388','23','39','7','','j','y','유어스]오모리김치볶음밥누룽지22g')" title="소비자가격:1,800원"><img src="./image/img_badd1.gif" border=0></a><br>
+  </td>
+ </tr>
+
+ <tr align=center>
+  <td height=35>
+
+   <a href="javascript:data_view('8809215607590')"><img src="http://image.cvslove.com/pds/product/s_8809215607590_01.jpg" width=35 height=35 border=0></a><br>
+
+  </td>
+  <td style="padding-left:10px;" align=left>
+<a href="javascript:data_view('8809215607590')">잡화]사각양면요지(이쑤시개)</a><font color=#ff8000>(300)EA<br>
+
+  </td>
+  <td>
+   <font color=#bb0000>500원
+  </td>
+  <td align=left>
+   <select name="quantity" class="opt_list" style="width:45px;" onChange="javascript:check_quantity('8809215607590','500','8','1','EA','<font color=#ff8000>(300)EA','j','y','y','잡화]사각양면요지(이쑤시개)')">
+<option value='1'>1</option><option value='2'>2</option><option value='3'>3</option><option value='4'>4</option><option value='5'>5</option><option value='6'>6</option><option value='7'>7</option><option value='8'>8</option><option value='9'>9</option><option value='10'>10</option><option value='11'>11</option><option value='12'>12</option><option value='13'>13</option><option value='14'>14</option><option value='15'>15</option><option value='16'>16</option><option value='17'>17</option><option value='18'>18</option><option value='19'>19</option><option value='20'>20</option><option value='21'>21</option>   <option value="0">기타
+   </select>
+	 <input type="hidden" name="orderMaxQty" value="999">
+	 <input type="hidden" name="expiringDate" value="">
+  </td>
+  <td><font style="font-size:11px;letter-spacing:-1px"><font color=#ff0000> 무반품</td>
+  <td>
+   <a href="javascript:cart_add('8809215607590','8','EA','500','23','39','7','','j','y','잡화]사각양면요지(이쑤시개)')" title="소비자가격:1,000원"><img src="./image/img_badd1.gif" border=0></a><br>
+  </td>
+ </tr>
+
+ <tr align=center>
+  <td height=35>
+
+   <a href="javascript:data_view('8809042199329')"><img src="http://image.cvslove.com/pds/product/s_8809042199329_01.jpg" width=35 height=35 border=0></a><br>
+
+  </td>
+  <td style="padding-left:10px;" align=left>
+<a href="javascript:data_view('8809042199329')">일해]오스틱10g</a><font color=#ff8000>(375)EA<br>
+<p class='pNameEtc'>유통기한 24개월 이내</p>
+  </td>
+  <td>
+   <font color=#bb0000>975원
+  </td>
+  <td align=left>
+   <select name="quantity" class="opt_list" style="width:45px;" onChange="javascript:check_quantity('8809042199329','975','9','25','EA','<font color=#ff8000>(375)EA','j','y','y','일해]오스틱10g')">
+<option value='25'>25</option><option value='50'>50</option><option value='75'>75</option><option value='100'>100</option><option value='125'>125</option><option value='150'>150</option><option value='175'>175</option><option value='200'>200</option><option value='225'>225</option><option value='250'>250</option><option value='275'>275</option><option value='300'>300</option><option value='325'>325</option><option value='350'>350</option><option value='375'>375</option><option value='400'>400</option><option value='425'>425</option><option value='450'>450</option><option value='475'>475</option><option value='500'>500</option><option value='525'>525</option>   <option value="0">기타
+   </select>
+	 <input type="hidden" name="orderMaxQty" value="999">
+	 <input type="hidden" name="expiringDate" value="">
+  </td>
+  <td><font style="font-size:11px;letter-spacing:-1px"><font color=#ff0000> 무반품</td>
+  <td>
+   <a href="javascript:cart_add('8809042199329','9','EA','975','23','39','7','','j','y','일해]오스틱10g')" title="소비자가격:1,500원"><img src="./image/img_badd1.gif" border=0></a><br>
+  </td>
+ </tr>
+
+ <tr align=center>
+  <td height=35>
+
+   <a href="javascript:data_view('8801097250048')"><img src="http://image.cvslove.com/pds/product/s_8801097250048.jpg" width=35 height=35 border=0></a><br>
+
+  </td>
+  <td style="padding-left:10px;" align=left>
+<a href="javascript:data_view('8801097250048')">동아]포카리스웨트펫500ml</a><font color=#ff8000>(20)EA<br>
+
+  </td>
+  <td>
+   <font color=#bb0000>1,440원
+  </td>
+  <td align=left>
+   <select name="quantity" class="opt_list" style="width:45px;" onChange="javascript:check_quantity('8801097250048','1440','10','20','EA','<font color=#ff8000>(20)EA','j','y','y','동아]포카리스웨트펫500ml')">
+<option value='20'>20</option><option value='40'>40</option><option value='60'>60</option><option value='80'>80</option><option value='100'>100</option><option value='120'>120</option><option value='140'>140</option><option value='160'>160</option><option value='180'>180</option><option value='200'>200</option><option value='220'>220</option><option value='240'>240</option><option value='260'>260</option><option value='280'>280</option><option value='300'>300</option><option value='320'>320</option><option value='340'>340</option><option value='360'>360</option><option value='380'>380</option><option value='400'>400</option><option value='420'>420</option>   <option value="0">기타
+   </select>
+	 <input type="hidden" name="orderMaxQty" value="999">
+	 <input type="hidden" name="expiringDate" value="">
+  </td>
+  <td><font style="font-size:11px;letter-spacing:-1px">반품가능</td>
+  <td>
+   <a href="javascript:cart_add('8801097250048','10','EA','1440','23','39','7','','j','y','동아]포카리스웨트펫500ml')" title="소비자가격:2,400원"><img src="./image/img_badd1.gif" border=0></a><br>
+  </td>
+ </tr>
+
+ <tr align=center>
+  <td height=35>
+
+   <a href="javascript:data_view('8801047111733')"><img src="http://image.cvslove.com/pds/product/s_8801047111733.jpg" width=35 height=35 border=0></a><br>
+
+  </td>
+  <td style="padding-left:10px;" align=left>
+<a href="javascript:data_view('8801047111733')">동원]라이트스탠다드참치100g</a><font color=#ff8000>(60)EA<br>
+
+  </td>
+  <td>
+   <font color=#bb0000>2,244원
+  </td>
+  <td align=left>
+   <select name="quantity" class="opt_list" style="width:45px;" onChange="javascript:check_quantity('8801047111733','2244','11','1','EA','<font color=#ff8000>(60)EA','j','y','y','동원]라이트스탠다드참치100g')">
+<option value='1'>1</option><option value='2'>2</option><option value='3'>3</option><option value='4'>4</option><option value='5'>5</option><option value='6'>6</option><option value='7'>7</option><option value='8'>8</option><option value='9'>9</option><option value='10'>10</option><option value='11'>11</option><option value='12'>12</option><option value='13'>13</option><option value='14'>14</option><option value='15'>15</option><option value='16'>16</option><option value='17'>17</option><option value='18'>18</option><option value='19'>19</option><option value='20'>20</option><option value='21'>21</option>   <option value="0">기타
+   </select>
+	 <input type="hidden" name="orderMaxQty" value="999">
+	 <input type="hidden" name="expiringDate" value="">
+  </td>
+  <td><font style="font-size:11px;letter-spacing:-1px">반품가능</td>
+  <td>
+   <a href="javascript:cart_add('8801047111733','11','EA','2244','23','39','7','','j','y','동원]라이트스탠다드참치100g')" title="소비자가격:3,300원"><img src="./image/img_badd1.gif" border=0></a><br>
+  </td>
+ </tr>
+
+ <tr align=center>
+  <td height=35>
+
+   <a href="javascript:data_view('8801260611324')"><img src="http://image.cvslove.com/pds/product/s_8801260611324_01.jpg" width=35 height=35 border=0></a><br>
+
+  </td>
+  <td style="padding-left:10px;" align=left>
+<a href="javascript:data_view('8801260611324')">깨나라]보솜이베이비물티슈10매(리뉴얼)</a><font color=#ff8000>(120)EA<br>
+
+  </td>
+  <td>
+   <font color=#bb0000>624원
+  </td>
+  <td align=left>
+   <select name="quantity" class="opt_list" style="width:45px;" onChange="javascript:check_quantity('8801260611324','624','12','10','EA','<font color=#ff8000>(120)EA','j','y','y','깨나라]보솜이베이비물티슈10매(리뉴얼)')">
+<option value='10'>10</option><option value='20'>20</option><option value='30'>30</option><option value='40'>40</option><option value='50'>50</option><option value='60'>60</option><option value='70'>70</option><option value='80'>80</option><option value='90'>90</option><option value='100'>100</option><option value='110'>110</option><option value='120'>120</option><option value='130'>130</option><option value='140'>140</option><option value='150'>150</option><option value='160'>160</option><option value='170'>170</option><option value='180'>180</option><option value='190'>190</option><option value='200'>200</option><option value='210'>210</option>   <option value="0">기타
+   </select>
+	 <input type="hidden" name="orderMaxQty" value="999">
+	 <input type="hidden" name="expiringDate" value="">
+  </td>
+  <td><font style="font-size:11px;letter-spacing:-1px"><font color=#ff0000> 무반품</td>
+  <td>
+   <a href="javascript:cart_add('8801260611324','12','EA','624','23','39','7','','j','y','깨나라]보솜이베이비물티슈10매(리뉴얼)')" title="소비자가격:1,200원"><img src="./image/img_badd1.gif" border=0></a><br>
+  </td>
+ </tr>
+
+ <tr align=center>
+  <td height=35>
+
+   <a href="javascript:data_view('8801260302390')"><img src="http://image.cvslove.com/pds/product/s_8801260302390_01.jpg" width=35 height=35 border=0></a><br>
+
+  </td>
+  <td style="padding-left:10px;" align=left>
+<a href="javascript:data_view('8801260302390')">깨나라]뽑아쓰는키친타올(150매*4입)</a><font color=#ff8000>(4)EA<br>
+
+  </td>
+  <td>
+   <font color=#bb0000>7,800원
+  </td>
+  <td align=left>
+   <select name="quantity" class="opt_list" style="width:45px;" onChange="javascript:check_quantity('8801260302390','7800','13','1','EA','<font color=#ff8000>(4)EA','j','y','y','깨나라]뽑아쓰는키친타올(150매*4입)')">
+<option value='1'>1</option><option value='2'>2</option><option value='3'>3</option><option value='4'>4</option><option value='5'>5</option><option value='6'>6</option><option value='7'>7</option><option value='8'>8</option><option value='9'>9</option><option value='10'>10</option><option value='11'>11</option><option value='12'>12</option><option value='13'>13</option><option value='14'>14</option><option value='15'>15</option><option value='16'>16</option><option value='17'>17</option><option value='18'>18</option><option value='19'>19</option><option value='20'>20</option><option value='21'>21</option>   <option value="0">기타
+   </select>
+	 <input type="hidden" name="orderMaxQty" value="999">
+	 <input type="hidden" name="expiringDate" value="">
+  </td>
+  <td><font style="font-size:11px;letter-spacing:-1px"><font color=#ff0000> 무반품</td>
+  <td>
+   <a href="javascript:cart_add('8801260302390','13','EA','7800','23','39','7','','j','y','깨나라]뽑아쓰는키친타올(150매*4입)')" title="소비자가격:13,000원"><img src="./image/img_badd1.gif" border=0></a><br>
+  </td>
+ </tr>
+
+ <tr align=center>
+  <td height=35>
+
+   <a href="javascript:data_view('8801260215027')"><img src="http://image.cvslove.com/pds/product/s_8801260215027_01.jpg" width=35 height=35 border=0></a><br>
+
+  </td>
+  <td style="padding-left:10px;" align=left>
+<a href="javascript:data_view('8801260215027')">깨나라]소프티각티슈250매*3입</a><font color=#ff8000>(8)EA<br>
+
+  </td>
+  <td>
+   <font color=#bb0000>6,450원
+  </td>
+  <td align=left>
+   <select name="quantity" class="opt_list" style="width:45px;" onChange="javascript:check_quantity('8801260215027','6450','14','1','EA','<font color=#ff8000>(8)EA','j','y','y','깨나라]소프티각티슈250매*3입')">
+<option value='1'>1</option><option value='2'>2</option><option value='3'>3</option><option value='4'>4</option><option value='5'>5</option><option value='6'>6</option><option value='7'>7</option><option value='8'>8</option><option value='9'>9</option><option value='10'>10</option><option value='11'>11</option><option value='12'>12</option><option value='13'>13</option><option value='14'>14</option><option value='15'>15</option><option value='16'>16</option><option value='17'>17</option><option value='18'>18</option><option value='19'>19</option><option value='20'>20</option><option value='21'>21</option>   <option value="0">기타
+   </select>
+	 <input type="hidden" name="orderMaxQty" value="999">
+	 <input type="hidden" name="expiringDate" value="">
+  </td>
+  <td><font style="font-size:11px;letter-spacing:-1px"><font color=#ff0000> 무반품</td>
+  <td>
+   <a href="javascript:cart_add('8801260215027','14','EA','6450','23','39','7','','j','y','깨나라]소프티각티슈250매*3입')" title="소비자가격:8,600원"><img src="./image/img_badd1.gif" border=0></a><br>
+  </td>
+ </tr>
+
+ <tr align=center>
+  <td height=35>
+
+   <a href="javascript:data_view('8801260204137')"><img src="http://image.cvslove.com/pds/product/s_8801260204137_01.jpg" width=35 height=35 border=0></a><br>
+
+  </td>
+  <td style="padding-left:10px;" align=left>
+<a href="javascript:data_view('8801260204137')">깨나라]순수각티슈280매x3입</a><font color=#ff8000>(8)EA<br>
+
+  </td>
+  <td>
+   <font color=#bb0000>7,735원
+  </td>
+  <td align=left>
+   <select name="quantity" class="opt_list" style="width:45px;" onChange="javascript:check_quantity('8801260204137','7735','15','1','EA','<font color=#ff8000>(8)EA','j','y','y','깨나라]순수각티슈280매x3입')">
+<option value='1'>1</option><option value='2'>2</option><option value='3'>3</option><option value='4'>4</option><option value='5'>5</option><option value='6'>6</option><option value='7'>7</option><option value='8'>8</option><option value='9'>9</option><option value='10'>10</option><option value='11'>11</option><option value='12'>12</option><option value='13'>13</option><option value='14'>14</option><option value='15'>15</option><option value='16'>16</option><option value='17'>17</option><option value='18'>18</option><option value='19'>19</option><option value='20'>20</option><option value='21'>21</option>   <option value="0">기타
+   </select>
+	 <input type="hidden" name="orderMaxQty" value="999">
+	 <input type="hidden" name="expiringDate" value="">
+  </td>
+  <td><font style="font-size:11px;letter-spacing:-1px"><font color=#ff0000> 무반품</td>
+  <td>
+   <a href="javascript:cart_add('8801260204137','15','EA','7735','23','39','7','','j','y','깨나라]순수각티슈280매x3입')" title="소비자가격:11,900원"><img src="./image/img_badd1.gif" border=0></a><br>
+  </td>
+ </tr>
+
+</form>
+</table>
+
+  </td>
+ </tr>
+</table>
+<!-- 상품 리스트 //-->
+
+
+
+
+
+<!-- 페이지 이동 -->
+<div class="w100per tc mt20">
+<div class="marginAuto">
+   <form name="page" method="post" action="product_list.asp">
+   <input type="hidden" name="pageno" value="1">
+   <input type="hidden" name="dev" value="">
+   <input type="hidden" name="search_dev" value="">
+   <input type="hidden" name="search_word" value="">
+   <input type="hidden" name="search_word2" value="">
+   <input type="hidden" name="c1" value="">
+   <input type="hidden" name="c2" value="">
+   <input type="hidden" name="c3" value="">
+   <input type="hidden" name="maker" value="">
+   <input type="hidden" name="order" value="">
+   <input type="hidden" name="order_dev" value="j"> 
+   <input type="hidden" name="order_type" value="1">
+   <input type="hidden" name="order_date" value="20260905">
+   <input type="hidden" name="time_check" value="">
+   
+	<ul class="pageKr">
+
+      <li><span>&laquo;</span></li>
+
+      <li><a href="javascript:pageGo('1');" class="active">1</a></li>
+
+      <li><a href="javascript:pageGo('2');" class="">2</a></li>
+
+      <li><a href="javascript:pageGo('3');" class="">3</a></li>
+
+      <li><a href="javascript:pageGo('4');" class="">4</a></li>
+
+      <li><a href="javascript:pageGo('5');" class="">5</a></li>
+
+      <li><a href="javascript:pageGo('6');" class="">6</a></li>
+
+      <li><a href="javascript:pageGo('7');" class="">7</a></li>
+
+      <li><a href="javascript:pageGo('8');" class="">8</a></li>
+
+      <li><a href="javascript:pageGo('9');" class="">9</a></li>
+
+      <li><a href="javascript:pageGo('10');" class="">10</a></li>
+
+     <li><a href="javascript:pageGo('11');">&raquo;</a></li>
+
+ </ul>
+</form>
+</div>
+</div>
+<!-- 페이지 이동 -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div id="div_quantity" style="display:none;position:absolute;left:150;top:150">
+<table border=0 width=300 bgcolor=#000000 border=0 cellpadding=15 cellspacing=1>
+<form name="sform1">
+   <input type="hidden" name="product_code" value="">
+   <input type="hidden" name="price" value="">
+   <input type="hidden" name="unit" value=""> 
+   <input type="hidden" name="cs" value="">  
+   <input type="hidden" name="t_count" value="1">
+   <input type="hidden" name="order_unit_yn" value="y">   
+   <input type="hidden" name="product_name" value="">
+   <input type="hidden" name="valid" value="">
+ <tr>
+  <td bgcolor=#ffff80 align=center>
+  <br><br>
+   주문수량을 직접 입력해주세요.<br>
+   <input type="text" name="t_order_unit" size=5 style="background-color:ffff80; border:0x solid  #ffffff;text-align:right;" readonly><input type="text" name="t_unit_name" size=3 style="background-color:ffff80; border:0x solid  #ffffff;" readonly> 수량단위로 입력을 해주세요<br><br>
+   <img src="/images/img_dot_green.gif" width="100%" height="1"><br><br>   
+   ▶ 주문수량 : <input type=text name="t_quantity"size=5 maxlength=5 class="inputbox" value="" ONKEYPRESS="javascript:return check_key_digit();"><input type="text" name="t_unit_name2" size=3 style="background-color:ffff80; border:0x solid  #ffffff;" readonly>&nbsp;&nbsp;&nbsp; <input type="button" value=" 확 인 " onClick="javascript:set_quantity();" class="button_gray">
+   <input type="button" value=" 취 소" onClick="javascript:div_quantity_hide();" class="button_gray"><br><br>
+  </td>
+ </tr>
+</form> 
+</table>
+<br>
+</div>
+
+
+
+
+
+
+<!-- ### Global -->
+  </td>
+ </tr>
+</table>
+<!-- ### Global -->
+
+<br>
+
+</body>
+</html>
+

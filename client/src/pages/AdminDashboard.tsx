@@ -20,6 +20,7 @@ import {
 import { AuditItem, Product, OrderItem, OrderFailure, BarcodeAlias } from '../types';
 import { storageService } from '../services/storage';
 import { younmeOrderService, OrderProgressEvent } from '../services/younmeOrderService';
+import { cloudSyncService, SyncStatus } from '../services/cloudSyncService';
 import { UnmappedGallery } from '../components/UnmappedGallery';
 import { BarcodeAliasModal } from '../components/BarcodeAliasModal';
 import { OrderFailureModal } from '../components/OrderFailureModal';
@@ -34,6 +35,11 @@ export const AdminDashboard: React.FC = () => {
 
   // 발주 수량 임시 조정 맵 (barcode -> finalQty)
   const [customQuantities, setCustomQuantities] = useState<Record<string, number>>({});
+
+  // 클라우드 실시간 동기화 상태
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('DISCONNECTED');
+  const [lastSyncTime, setLastSyncTime] = useState<string>('');
+  const [isRefreshingSync, setIsRefreshingSync] = useState(false);
 
   // 모달 상태
   const [showUnmappedModal, setShowUnmappedModal] = useState(false);
@@ -60,16 +66,41 @@ export const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     loadData();
+
+    // 1. 클라우드 실시간 동기화 연결 (사장님 뷰)
+    cloudSyncService.connect(undefined, 'ADMIN');
+
+    // 2. 알바가 바코드를 찍거나 수정하면 사장님 화면에 0.1초 만에 실시간 반영!
+    const unsubSync = cloudSyncService.onSync((newAudits) => {
+      setAudits(newAudits);
+    });
+
+    const unsubStatus = cloudSyncService.onStatusChange((st, time) => {
+      setSyncStatus(st);
+      if (time) setLastSyncTime(time);
+    });
+
+    return () => {
+      unsubSync();
+      unsubStatus();
+    };
   }, []);
 
   const [tempFilter, setTempFilter] = useState<'ALL' | 'AMBIENT' | 'CHILLED'>('ALL');
 
-  // 발주 대상 품목 계산
+  // 발주 대상 품목 계산 (핵심: 최소 발주수량의 배수로만 주문!)
   const orderItems: OrderItem[] = audits.map((audit) => {
     const { product, alias } = storageService.findProduct(audit.barcode);
-    const targetStock = product ? product.targetStock : 10;
-    const minOrderQty = product ? product.minOrderQty : 1;
-    const recommendedQty = Math.max(0, targetStock - audit.stockCount);
+    const targetStock = product ? product.targetStock : (audit.targetStock || 10);
+    const minOrderQty = product ? Math.max(1, product.minOrderQty) : Math.max(1, audit.minOrderQty || 1);
+
+    // 부족분 계산 (목표 안전재고 - 실사재고)
+    const shortage = Math.max(0, targetStock - audit.stockCount);
+
+    // ★ 0보다 크면 반드시 최소 발주수량(minOrderQty)의 '배수'로 올림 계산!
+    const recommendedQty = shortage > 0
+      ? Math.ceil(shortage / minOrderQty) * minOrderQty
+      : 0;
 
     // 사장님이 직접 수정한 수량이 있으면 사용, 없으면 추천 수량
     const finalOrderQty = customQuantities[audit.barcode] !== undefined
@@ -77,6 +108,7 @@ export const AdminDashboard: React.FC = () => {
       : recommendedQty;
 
     const isBelowMinQty = finalOrderQty > 0 && finalOrderQty < minOrderQty;
+    const isNotMultiple = finalOrderQty > 0 && (finalOrderQty % minOrderQty !== 0);
 
     return {
       barcode: audit.barcode,
@@ -86,9 +118,11 @@ export const AdminDashboard: React.FC = () => {
       recommendedQty,
       finalOrderQty,
       minOrderQty,
-      isBelowMinQty,
+      isBelowMinQty: isBelowMinQty || isNotMultiple,
       usingAliasBarcode: alias?.newBarcode,
       category: product ? product.category : '기타',
+      cost: product ? product.cost : 0,
+      price: product ? product.price : 0,
       status: 'PENDING',
     };
   });
@@ -97,14 +131,33 @@ export const AdminDashboard: React.FC = () => {
   const itemsToOrder = orderItems.filter((item) => item.finalOrderQty > 0);
 
   // 최소 발주량으로 수량 즉시 올리기
-  const handleFillMinQty = (barcode: string, minQty: number) => {
+  // 최소 발주수량의 올바른 배수로 채우기 (보정)
+  const handleSnapToMultiple = (barcode: string, val: number, minQty: number) => {
+    const step = Math.max(1, minQty);
+    const snapped = Math.ceil(Math.max(1, val) / step) * step;
     setCustomQuantities((prev) => ({
       ...prev,
-      [barcode]: minQty,
+      [barcode]: snapped,
     }));
   };
 
-  // 수량 직접 변경 핸들러
+  // ★ 수량 증감 버튼 (+ / -): '최소 발주수량(minOrderQty)의 배수' 단위로만 증감!
+  const handleStepQty = (barcode: string, currentVal: number, minQty: number, direction: 1 | -1) => {
+    const step = Math.max(1, minQty);
+    let next: number;
+    if (direction > 0) {
+      next = Math.floor(currentVal / step) * step + step;
+    } else {
+      next = Math.ceil(currentVal / step) * step - step;
+      if (next < 0) next = 0;
+    }
+    setCustomQuantities((prev) => ({
+      ...prev,
+      [barcode]: next,
+    }));
+  };
+
+  // 수량 직접 입력 핸들러
   const handleQuantityChange = (barcode: string, val: number) => {
     setCustomQuantities((prev) => ({
       ...prev,
@@ -112,22 +165,49 @@ export const AdminDashboard: React.FC = () => {
     }));
   };
 
-  // 사장님 요청: 최소 발주단위 실시간 인라인 수정 핸들러
+  // ★ [요청 3 반영]: 사장님 뷰에서 목표 재고 수량(targetStock) 인라인 수정 핸들러
+  const handleTargetStockChange = (barcode: string, val: number) => {
+    const safeVal = Math.max(0, val);
+    storageService.updateProductTargetStock(barcode, safeVal);
+    loadData();
+  };
+
+  // 사장님 요청: 최소 발주단위(MOQ) 실시간 인라인 수정 핸들러
   const handleMinOrderQtyChange = (barcode: string, val: number) => {
-    storageService.updateProductMinOrderQty(barcode, Math.max(1, val));
+    const safeVal = Math.max(1, val);
+    storageService.updateProductMinOrderQty(barcode, safeVal);
     loadData();
   };
 
   // 사장님 요청: 발주 리스트에서 특정 상품 즉시 제외/삭제
   const handleRemoveFromOrder = (barcode: string) => {
     storageService.deleteAudit(barcode);
+    const updated = storageService.getAudits();
     loadData();
+    cloudSyncService.broadcastAudits(updated, 'ADMIN');
+  };
+
+  // 실사 목록 전체 초기화 (발주 후 새 실사 시작 시)
+  const handleClearAllAudits = () => {
+    if (!confirm('현재 실사 목록을 모두 비우시겠습니까? 알바 폰의 실사 목록도 함께 리셋됩니다.')) return;
+    storageService.clearAudits();
+    setCustomQuantities({});
+    loadData();
+    cloudSyncService.broadcastClear('ADMIN');
+  };
+
+  // 클라우드 실사 데이터 수동 새로고침
+  const handleRefreshCloudSync = () => {
+    setIsRefreshingSync(true);
+    cloudSyncService.connect(undefined, 'ADMIN');
+    loadData();
+    setTimeout(() => setIsRefreshingSync(false), 600);
   };
 
   // 사장님 요청: 상품명이 없는 바코드 인라인 입력 및 영구 마스터 저장
   const handleStartEditName = (barcode: string, currentName: string) => {
     setEditingBarcode(barcode);
-    setEditingName(currentName === '신규/미등록 상품' ? '' : currentName);
+    setEditingName(currentName === '신규/미등록상품' ? '' : currentName);
   };
 
   const handleSaveName = (barcode: string) => {
@@ -140,12 +220,22 @@ export const AdminDashboard: React.FC = () => {
     setEditingName('');
   };
 
-  // 유앤미24 자동 발주 실행
+  // 유앤미24 자동 발주 실행 (★ 모든 품목의 수량을 minOrderQty의 배수로 최종 검증/보정하여 전송)
   const handleStartOrder = async () => {
     if (itemsToOrder.length === 0) {
       alert('발주할 상품이 없습니다. (발주 수량이 모두 0개입니다)');
       return;
     }
+
+    // ★ 모든 주문 품목이 최소 발주수량의 배수인지 최종 보정
+    const sanitizedItems: OrderItem[] = itemsToOrder.map((item) => {
+      const step = Math.max(1, item.minOrderQty);
+      const safeQty = item.finalOrderQty > 0 ? Math.ceil(item.finalOrderQty / step) * step : 0;
+      return {
+        ...item,
+        finalOrderQty: safeQty,
+      };
+    });
 
     let hasBot = false;
     try {
@@ -159,7 +249,7 @@ export const AdminDashboard: React.FC = () => {
       return;
     }
 
-    if (!confirm(`총 ${itemsToOrder.length}개 품목을 유앤미24에 자동으로 로그인하여 발주하시겠습니까?`)) {
+    if (!confirm(`총 ${sanitizedItems.length}개 품목을 최소 발주단위 배수로 유앤미24에 자동 발주하시겠습니까?`)) {
       return;
     }
 
@@ -167,7 +257,7 @@ export const AdminDashboard: React.FC = () => {
     setOrderProgress(null);
 
     try {
-      const result = await younmeOrderService.executeOrder(itemsToOrder, (evt) => {
+      const result = await younmeOrderService.executeOrder(sanitizedItems, (evt) => {
         setOrderProgress(evt);
       });
 
@@ -215,6 +305,54 @@ export const AdminDashboard: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-6 pb-24">
+      {/* 0. ★ [요청 1 반영]: 알바 폰 ↔ 사장님 폰 실시간 클라우드 동기화 배너 */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center space-x-2.5">
+          <div
+            className={`w-3 h-3 rounded-full animate-pulse shrink-0 ${
+              syncStatus === 'CONNECTED' ? 'bg-emerald-400 shadow-xs shadow-emerald-400/50' : 'bg-amber-400'
+            }`}
+          />
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="font-bold text-white text-xs">
+                {syncStatus === 'CONNECTED' ? '알바 스마트폰과 실시간 연동 중' : '클라우드 릴레이 연결 중..'}
+              </span>
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.2 rounded-full font-medium">
+                기기 간 실시간 자동 공유
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              알바가 매장에서 바코드를 찍으면 사장님 화면에 즉시 나타납니다.
+              {lastSyncTime && <span className="text-slate-500 ml-1.5">(최근 동기화: {lastSyncTime})</span>}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-2 self-end sm:self-auto shrink-0">
+          <button
+            type="button"
+            onClick={handleRefreshCloudSync}
+            disabled={isRefreshingSync}
+            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 font-semibold text-xs transition-colors flex items-center space-x-1.5"
+            title="알바가 찍은 최신 실사 불러오기"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingSync ? 'animate-spin' : ''}`} />
+            <span>최신 동기화</span>
+          </button>
+          {audits.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClearAllAudits}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-300 border border-slate-700/80 font-medium text-xs transition-colors"
+              title="실사 목록 비우기 (새 실사 시작)"
+            >
+              실사 초기화
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* 1. 상단 대시보드 요약 및 빠른 액션 바 */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
         {/* 오늘 실사 재고 품목 */}
@@ -442,9 +580,9 @@ export const AdminDashboard: React.FC = () => {
                   <th className="p-3.5">바코드 / 대체</th>
                   <th className="p-3.5">상품명</th>
                   <th className="p-3.5 text-center">알바 실사 재고</th>
-                  <th className="p-3.5 text-center">목표 안전재고</th>
-                  <th className="p-3.5 text-center">최소 발주단위</th>
-                  <th className="p-3.5 text-center">추천 수량</th>
+                  <th className="p-3.5 text-center text-amber-300">목표 안전재고</th>
+                  <th className="p-3.5 text-center text-blue-300">최소 발주단위</th>
+                  <th className="p-3.5 text-center">추천 수량 (배수)</th>
                   <th className="p-3.5 text-right">최종 발주 수량</th>
                   <th className="p-3.5 text-center">발주제외</th>
                 </tr>
@@ -548,12 +686,37 @@ export const AdminDashboard: React.FC = () => {
                       </span>
                     </td>
 
-                    {/* 목표 안전재고 */}
-                    <td className="p-3.5 text-center text-slate-400 font-mono">
-                      {item.targetStock}개
+                    {/* ★ [요청 3 반영]: 목표 안전재고 (사장님 뷰에서 인라인 수정 가능) */}
+                    <td className="p-3.5 text-center font-mono">
+                      <div className="inline-flex items-center space-x-1 bg-slate-950 border border-amber-500/40 rounded-xl px-1.5 py-0.5 shadow-inner">
+                        <button
+                          type="button"
+                          onClick={() => handleTargetStockChange(item.barcode, item.targetStock - 1)}
+                          className="w-4 h-4 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 flex items-center justify-center font-bold text-xs transition-colors"
+                          title="목표 재고 1 감소"
+                        >
+                          -
+                        </button>
+                        <input
+                          type="number"
+                          min="0"
+                          value={item.targetStock}
+                          onChange={(e) => handleTargetStockChange(item.barcode, parseInt(e.target.value) || 0)}
+                          className="w-10 text-center font-mono font-bold text-amber-300 bg-transparent text-xs focus:outline-hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleTargetStockChange(item.barcode, item.targetStock + 1)}
+                          className="w-4 h-4 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 flex items-center justify-center font-bold text-xs transition-colors"
+                          title="목표 재고 1 증가"
+                        >
+                          +
+                        </button>
+                        <span className="text-[10px] text-slate-500">개</span>
+                      </div>
                     </td>
 
-                    {/* 최소 발주량 (MOQ) 인라인 수정 */}
+                    {/* 최소 발주단위 (MOQ) 인라인 수정 */}
                     <td className="p-3.5 text-center font-mono">
                       <div className="inline-flex items-center space-x-1 bg-slate-950 border border-slate-700/80 rounded-xl px-1.5 py-0.5 shadow-inner">
                         <button
@@ -583,46 +746,67 @@ export const AdminDashboard: React.FC = () => {
                       </div>
                     </td>
 
-                    {/* 추천 발주 수량 */}
+                    {/* 추천 발주 수량 (최소 발주단위 배수로 자동 계산됨) */}
                     <td className="p-3.5 text-center font-mono">
-                      <span className={item.recommendedQty > 0 ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                        {item.recommendedQty}개
-                      </span>
+                      <div className="flex flex-col items-center">
+                        <span className={item.recommendedQty > 0 ? 'text-emerald-400 font-bold text-sm' : 'text-slate-500'}>
+                          {item.recommendedQty}개
+                        </span>
+                        {item.recommendedQty > 0 && item.minOrderQty > 1 && (
+                          <span className="text-[10px] text-emerald-500/80">
+                            ({item.minOrderQty}개 단위 배수)
+                          </span>
+                        )}
+                      </div>
                     </td>
 
-                    {/* 최종 발주 수량 & 최소발주량 미달 경고 */}
+                    {/* ★ [요청 2 반영]: 최종 발주 수량 (배수 단위 조절 버튼 + 배수 보정 알림) */}
                     <td className="p-3.5 text-right">
-                      <div className="flex items-center justify-end space-x-2">
-                        {/* 최소 발주량 미달 시 경고 + 원클릭 채우기 버튼 */}
-                        {item.isBelowMinQty && (
-                          <div className="flex items-center space-x-1.5 bg-amber-950/60 border border-amber-800/80 px-2 py-1 rounded-xl">
-                            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                            <span className="text-[10px] text-amber-300 font-medium">최소 {item.minOrderQty}개 필요</span>
+                      <div className="flex flex-col items-end space-y-1">
+                        <div className="flex items-center space-x-1.5">
+                          <div className="inline-flex items-center bg-slate-950 border border-slate-700 rounded-xl p-0.5">
                             <button
                               type="button"
-                              onClick={() => handleFillMinQty(item.barcode, item.minOrderQty)}
-                              className="px-1.5 py-0.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-bold rounded"
+                              onClick={() => handleStepQty(item.barcode, item.finalOrderQty, item.minOrderQty, -1)}
+                              disabled={item.finalOrderQty <= 0}
+                              className="w-5 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white font-bold text-xs flex items-center justify-center transition-colors"
+                              title={`${item.minOrderQty}개 감소`}
                             >
-                              채우기
+                              -
+                            </button>
+                            <input
+                              type="number"
+                              min="0"
+                              step={item.minOrderQty}
+                              value={item.finalOrderQty}
+                              onChange={(e) => handleQuantityChange(item.barcode, parseInt(e.target.value) || 0)}
+                              className={`w-16 px-1.5 py-1 text-center font-mono font-bold text-xs bg-transparent focus:outline-hidden ${
+                                item.finalOrderQty > 0 ? 'text-white' : 'text-slate-500'
+                              }`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleStepQty(item.barcode, item.finalOrderQty, item.minOrderQty, 1)}
+                              className="w-5 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center transition-colors"
+                              title={`${item.minOrderQty}개 증가`}
+                            >
+                              +
                             </button>
                           </div>
-                        )}
-
-                        {/* 수량 인라인 직접 입력 */}
-                        <div className="flex items-center space-x-1">
-                          <input
-                            type="number"
-                            min="0"
-                            value={item.finalOrderQty}
-                            onChange={(e) => handleQuantityChange(item.barcode, parseInt(e.target.value) || 0)}
-                            className={`w-16 px-2 py-1.5 rounded-xl text-right font-mono font-bold text-xs border focus:outline-hidden ${
-                              item.finalOrderQty > 0
-                                ? 'bg-slate-950 text-white border-blue-500/60 focus:border-blue-400'
-                                : 'bg-slate-900 text-slate-500 border-slate-700'
-                            }`}
-                          />
                           <span className="text-slate-400 text-xs">개</span>
                         </div>
+
+                        {item.isBelowMinQty && (
+                          <button
+                            type="button"
+                            onClick={() => handleSnapToMultiple(item.barcode, item.finalOrderQty, item.minOrderQty)}
+                            className="flex items-center space-x-1 bg-amber-950/80 border border-amber-500/60 px-2 py-0.5 rounded-lg text-amber-300 hover:bg-amber-900 transition-colors text-[10px]"
+                            title="클릭하여 최소 발주량의 배수로 올림 보정"
+                          >
+                            <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                            <span>{item.minOrderQty}개 배수로 맞추기</span>
+                          </button>
+                        )}
                       </div>
                     </td>
 

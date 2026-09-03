@@ -12,6 +12,7 @@
     "dotenv": "^17.4.2",
     "express": "^4.19.2",
     "iconv-lite": "^0.6.3",
+    "mqtt": "^5.15.2",
     "playwright": "^1.62.1"
   }
 }

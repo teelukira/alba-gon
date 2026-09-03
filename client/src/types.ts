@@ -43,6 +43,8 @@ export interface OrderItem {
   isBelowMinQty: boolean;
   usingAliasBarcode?: string; // 대체 바코드로 변경된 경우
   category?: string;          // 저온/상온 여부
+  cost?: number;              // 유앤미 공급단가(원가)
+  price?: number;             // 판매가
   status: 'PENDING' | 'ORDERED' | 'FAILED';
   failReason?: string;
 }

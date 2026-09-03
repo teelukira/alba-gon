@@ -2,6 +2,11 @@
 chcp 949 > nul
 title [편의점 알바곤] 1분 자동 설치 도우미
 
+:: Node.js 기본 설치 경로 자동 감지 (재부팅 없이 바로 실행 지원)
+if exist "%ProgramFiles%\nodejs" set "PATH=%ProgramFiles%\nodejs;%PATH%"
+if exist "%ProgramFiles(x86)%\nodejs" set "PATH=%ProgramFiles(x86)%\nodejs;%PATH%"
+if exist "%LocalAppData%\Programs\node" set "PATH=%LocalAppData%\Programs\node;%PATH%"
+
 echo ========================================================
 echo   [편의점 알바곤] 유앤미24 자동 발주 프로그램 설치
 echo ========================================================
@@ -14,7 +19,8 @@ if %errorlevel% neq 0 (
     echo [알림] Node.js 가 아직 설치되지 않았습니다!
     echo.
     echo 웹 브라우저가 열리면 초록색 [LTS 버전] 버튼을 눌러 다운받으신 뒤,
-    echo 설치 창에서 'Next'만 계속 누르고 컴퓨터를 한 번 껐다 켜주세요.
+    echo 설치 창에서 'Next'만 계속 누르고 설치를 완료해주세요.
+    echo (설치 후 재부팅 없이 바로 이 창을 다시 실행하시면 됩니다)
     echo.
     start https://nodejs.org/ko
     pause

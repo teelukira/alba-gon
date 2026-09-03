@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { BarcodeScanner } from '../components/BarcodeScanner';
 import { QuantityModal } from '../components/QuantityModal';
 import { PhotoCaptureModal } from '../components/PhotoCaptureModal';
 import { AuditItem, Product } from '../types';
 import { storageService } from '../services/storage';
-import { CheckCircle2, AlertCircle, Clock, Trash2, Edit3, Camera, Sparkles } from 'lucide-react';
+import { cloudSyncService, SyncStatus } from '../services/cloudSyncService';
+import { CheckCircle2, Clock, Trash2, Camera, Cloud, CloudCheck, RefreshCw, Send } from 'lucide-react';
 
 export const WorkerApp: React.FC = () => {
   const [audits, setAudits] = useState<AuditItem[]>([]);
@@ -12,63 +13,86 @@ export const WorkerApp: React.FC = () => {
   const [detectedProduct, setDetectedProduct] = useState<Product | undefined>(undefined);
   const [pendingPhoto, setPendingPhoto] = useState<string | null>(null);
   const [step, setStep] = useState<'IDLE' | 'QUANTITY' | 'PHOTO'>('IDLE');
-  const [workerName, setWorkerName] = useState('야간알바');
+  const [workerName, setWorkerName] = useState('주간알바');
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('DISCONNECTED');
+  const [lastSyncTime, setLastSyncTime] = useState<string>('');
+  const [isSending, setIsSending] = useState(false);
+  const [sendSuccessMsg, setSendSuccessMsg] = useState(false);
 
   useEffect(() => {
     setAudits(storageService.getAudits());
     setWorkerName(storageService.getSettings().workerName);
+
+    // 1. 클라우드 실시간 동기화 연결
+    cloudSyncService.connect(undefined, 'WORKER');
+
+    // 2. 다른 기기(사장님 등)에서 동기화 이벤트 수신 시 화면 즉시 갱신
+    const unsubSync = cloudSyncService.onSync((newAudits) => {
+      setAudits(newAudits);
+    });
+
+    // 3. 연결 상태 감시
+    const unsubStatus = cloudSyncService.onStatusChange((st, time) => {
+      setSyncStatus(st);
+      if (time) setLastSyncTime(time);
+    });
+
+    return () => {
+      unsubSync();
+      unsubStatus();
+    };
   }, []);
 
   // 바코드 감지 핸들러
   const handleBarcodeDetected = (barcode: string) => {
-    if (step !== 'IDLE') return; // 이미 모달 진행 중이면 무시
+    if (step !== 'IDLE') return;
 
     setActiveBarcode(barcode);
     const { product } = storageService.findProduct(barcode);
     setDetectedProduct(product);
 
     if (product) {
-      // 등록된 상품 -> 바로 수량 입력
       setPendingPhoto(null);
       setStep('QUANTITY');
     } else {
-      // 미등록 상품 -> 사장님 피드백: "바코드 번호에 매핑된 상품명이 없다면 사진을 하나 더 찍어"
       setStep('PHOTO');
     }
   };
 
-  // 사진 촬영 완료 핸들러
   const handlePhotoCaptured = (photoBase64: string) => {
     setPendingPhoto(photoBase64);
     setStep('QUANTITY');
   };
 
-  // 사진 없이 건너뛰기
   const handlePhotoSkipped = () => {
     setPendingPhoto(null);
     setStep('QUANTITY');
   };
 
-  // 수량 저장 완료 핸들러
+  // 수량 저장 완료 핸들러 -> 로컬 저장 + 사장님 폰으로 즉시 클라우드 전송!
   const handleSaveQuantity = (quantity: number) => {
     if (!activeBarcode) return;
 
     const isUnmapped = !detectedProduct;
-    const productName = detectedProduct ? detectedProduct.name : '신규/미등록 상품';
+    const productName = detectedProduct ? detectedProduct.name : '신규/미등록상품';
 
-    const saved = storageService.saveAudit({
+    storageService.saveAudit({
       barcode: activeBarcode,
       productName,
       stockCount: quantity,
       targetStock: detectedProduct ? detectedProduct.targetStock : 10,
-      minOrderQty: detectedProduct ? detectedProduct.minOrderQty : 10,
+      minOrderQty: detectedProduct ? detectedProduct.minOrderQty : 1,
       photoUrl: pendingPhoto || undefined,
       isUnmapped,
       workerName,
     });
 
-    setAudits(storageService.getAudits());
+    const updated = storageService.getAudits();
+    setAudits(updated);
     handleCloseModals();
+
+    // ★ 클라우드 브로드캐스트 (사장님 스마트폰으로 0.1초 만에 자동 전송)
+    cloudSyncService.broadcastAudits(updated, 'WORKER');
   };
 
   const handleCloseModals = () => {
@@ -80,17 +104,64 @@ export const WorkerApp: React.FC = () => {
 
   const handleDeleteAudit = (id: string) => {
     storageService.deleteAudit(id);
-    setAudits(storageService.getAudits());
+    const updated = storageService.getAudits();
+    setAudits(updated);
+    cloudSyncService.broadcastAudits(updated, 'WORKER');
   };
 
-  const unmappedCount = audits.filter(a => a.isUnmapped).length;
+  // 사장님께 수동 즉시 전송 버튼
+  const handleManualSendToAdmin = async () => {
+    setIsSending(true);
+    const success = await cloudSyncService.broadcastAudits(audits, 'WORKER');
+    setIsSending(false);
+    if (success) {
+      setSendSuccessMsg(true);
+      setTimeout(() => setSendSuccessMsg(false), 3000);
+    }
+  };
+
+  const unmappedCount = audits.filter((a) => a.isUnmapped).length;
 
   return (
     <div className="max-w-md mx-auto px-4 py-4 space-y-4 pb-20">
-      {/* 실사 진행 상황 요약 카드 */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-sm flex items-center justify-between text-xs">
+      {/* 1. 실시간 클라우드 동기화 상태 배너 */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 shadow-xs flex items-center justify-between text-xs">
         <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold">
+          <div
+            className={`w-2.5 h-2.5 rounded-full animate-pulse ${
+              syncStatus === 'CONNECTED' ? 'bg-emerald-400 shadow-xs shadow-emerald-400/50' : 'bg-amber-400'
+            }`}
+          />
+          <div className="flex flex-col">
+            <span className="font-semibold text-slate-200 text-[11px] flex items-center space-x-1">
+              <span>{syncStatus === 'CONNECTED' ? '사장님 폰과 실시간 연결됨' : '클라우드 연결 중..'}</span>
+            </span>
+            {lastSyncTime && (
+              <span className="text-[10px] text-slate-500">마지막 동기화: {lastSyncTime}</span>
+            )}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleManualSendToAdmin}
+          disabled={isSending || audits.length === 0}
+          className="px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-bold text-[11px] transition-all flex items-center space-x-1 shadow-xs shadow-blue-600/30"
+          title="현재 실사 목록을 사장님 폰으로 즉시 전송"
+        >
+          {isSending ? (
+            <RefreshCw className="w-3 h-3 animate-spin" />
+          ) : (
+            <Send className="w-3 h-3" />
+          )}
+          <span>{sendSuccessMsg ? '전송 완료!' : '사장님께 전송'}</span>
+        </button>
+      </div>
+
+      {/* 2. 실사 진행 상황 요약 카드 */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-sm flex items-center justify-between text-xs">
+        <div className="flex items-center space-x-2.5">
+          <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-base">
             {audits.length}
           </div>
           <div>
@@ -105,20 +176,17 @@ export const WorkerApp: React.FC = () => {
             <span className="font-semibold text-[11px]">미등록 사진 {unmappedCount}개</span>
           </div>
         ) : (
-          <div className="flex items-center space-x-1 text-slate-500 text-[11px]">
+          <div className="flex items-center space-x-1 text-slate-400 text-[11px]">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-            <span>실시간 자동저장</span>
+            <span>실시간 자동 보존</span>
           </div>
         )}
       </div>
 
-      {/* 카메라 실시간 바코드 스캐너 */}
-      <BarcodeScanner
-        onDetected={handleBarcodeDetected}
-        isPaused={step !== 'IDLE'}
-      />
+      {/* 3. 카메라 실시간 바코드 스캐너 */}
+      <BarcodeScanner onDetected={handleBarcodeDetected} isPaused={step !== 'IDLE'} />
 
-      {/* 최근 실사 완료 리스트 */}
+      {/* 4. 최근 실사 완료 리스트 */}
       <div className="space-y-2">
         <div className="flex justify-between items-center px-1">
           <h3 className="font-bold text-xs text-slate-400 flex items-center space-x-1">
@@ -126,13 +194,13 @@ export const WorkerApp: React.FC = () => {
             <span>최근 스캔한 재고 ({audits.length})</span>
           </h3>
           {audits.length > 0 && (
-            <span className="text-[11px] text-slate-500">터치하여 수량 확인</span>
+            <span className="text-[11px] text-slate-500">실시간 클라우드 보관 중</span>
           )}
         </div>
 
         {audits.length === 0 ? (
           <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-6 text-center text-xs text-slate-500">
-            위 카메라에 상품 바코드를 비추면 자동으로 인식됩니다.
+            위 카메라에 상품 바코드를 비추면 자동으로 인식합니다.
           </div>
         ) : (
           <div className="space-y-1.5 max-h-[320px] overflow-y-auto">
