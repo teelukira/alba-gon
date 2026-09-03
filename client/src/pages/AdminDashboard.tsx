@@ -14,6 +14,8 @@ import {
   Search,
   Check,
   Plus,
+  Edit3,
+  X,
 } from 'lucide-react';
 import { AuditItem, Product, OrderItem, OrderFailure, BarcodeAlias } from '../types';
 import { storageService } from '../services/storage';
@@ -39,6 +41,11 @@ export const AdminDashboard: React.FC = () => {
   const [aliasTargetBarcode, setAliasTargetBarcode] = useState('');
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [showStockSetupModal, setShowStockSetupModal] = useState(false);
+
+  // 사장님 요청: 상품명이 없는 바코드 인라인 이름 입력/수정 상태
+  const [editingBarcode, setEditingBarcode] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState<string>('');
+  const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
 
   // 발주 진행 상태
   const [isOrdering, setIsOrdering] = useState(false);
@@ -115,6 +122,22 @@ export const AdminDashboard: React.FC = () => {
   const handleRemoveFromOrder = (barcode: string) => {
     storageService.deleteAudit(barcode);
     loadData();
+  };
+
+  // 사장님 요청: 상품명이 없는 바코드 인라인 입력 및 영구 마스터 저장
+  const handleStartEditName = (barcode: string, currentName: string) => {
+    setEditingBarcode(barcode);
+    setEditingName(currentName === '신규/미등록 상품' ? '' : currentName);
+  };
+
+  const handleSaveName = (barcode: string) => {
+    const trimmed = editingName.trim();
+    if (trimmed) {
+      storageService.registerProductName(barcode, trimmed);
+      loadData();
+    }
+    setEditingBarcode(null);
+    setEditingName('');
   };
 
   // 유앤미24 자동 발주 실행
@@ -442,19 +465,80 @@ export const AdminDashboard: React.FC = () => {
                       </div>
                     </td>
 
-                    {/* 상품명 */}
+                    {/* 사장님 요청: 상품명이 없는 바코드 인라인 입력 및 사진 확인 */}
                     <td className="p-3.5 font-medium text-white">
-                      <div className="flex items-center space-x-1.5">
-                        <span>{item.productName}</span>
-                        {item.productName === '신규/미등록 상품' && (
-                          <button
-                            onClick={() => setShowUnmappedModal(true)}
-                            className="text-[10px] bg-amber-950 text-amber-300 border border-amber-800 px-1.5 py-0.5 rounded font-bold"
-                          >
-                            사진확인
-                          </button>
-                        )}
-                      </div>
+                      {(() => {
+                        const audit = audits.find((a) => a.barcode === item.barcode);
+                        const isUnregistered = item.productName === '신규/미등록 상품' || !item.productName;
+
+                        if (editingBarcode === item.barcode) {
+                          return (
+                            <div className="flex items-center space-x-1.5 animate-fade-in">
+                              <input
+                                type="text"
+                                value={editingName}
+                                onChange={(e) => setEditingName(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleSaveName(item.barcode);
+                                  if (e.key === 'Escape') setEditingBarcode(null);
+                                }}
+                                placeholder="상품명 입력 (예: 농심 짜파게티)"
+                                autoFocus
+                                className="px-2.5 py-1 text-xs rounded-lg bg-slate-950 border border-emerald-500 text-white font-medium focus:outline-hidden w-48 shadow-inner"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleSaveName(item.barcode)}
+                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg shrink-0 transition-colors shadow-xs"
+                              >
+                                저장
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingBarcode(null)}
+                                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[11px] rounded-lg shrink-0 transition-colors"
+                              >
+                                취소
+                              </button>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="flex items-center space-x-2 group">
+                            {/* 알바가 찍은 실물 사진 썸네일 미리보기 */}
+                            {audit?.photoUrl && (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewPhotoUrl(audit.photoUrl!)}
+                                className="w-8 h-8 rounded-lg overflow-hidden border-2 border-amber-500/80 hover:border-amber-400 shrink-0 shadow-sm relative group/pic cursor-pointer"
+                                title="알바가 찍은 실물 사진 크게 보기"
+                              >
+                                <img src={audit.photoUrl} alt="실물 사진" className="w-full h-full object-cover" />
+                              </button>
+                            )}
+
+                            <span className={isUnregistered ? 'text-amber-400 font-bold' : 'text-white'}>
+                              {item.productName}
+                            </span>
+
+                            {/* 상품명 입력/수정 버튼 */}
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditName(item.barcode, item.productName)}
+                              className={`px-2 py-0.5 rounded-lg text-[10px] flex items-center space-x-1 transition-all ${
+                                isUnregistered
+                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 hover:bg-amber-500/40 font-bold shadow-xs'
+                                  : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800 opacity-80 group-hover:opacity-100'
+                              }`}
+                              title="상품명을 입력하면 마스터 DB에 영구 등록됩니다"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                              <span>{isUnregistered ? '이름입력' : '수정'}</span>
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* 실사 재고 */}
@@ -595,6 +679,39 @@ export const AdminDashboard: React.FC = () => {
           onClose={() => setShowStockSetupModal(false)}
           onUpdated={loadData}
         />
+      )}
+
+      {/* 알바가 촬영한 실물 사진 크게 보기 모달 */}
+      {previewPhotoUrl && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl animate-fade-in">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+              <span className="font-bold text-xs text-white flex items-center">
+                <ImageIcon className="w-4 h-4 text-amber-400 mr-1.5" />
+                알바가 촬영한 실물 사진
+              </span>
+              <button
+                type="button"
+                onClick={() => setPreviewPhotoUrl(null)}
+                className="text-slate-400 hover:text-white p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 bg-black flex items-center justify-center">
+              <img src={previewPhotoUrl} alt="실물 사진" className="max-h-80 w-auto rounded-xl object-contain shadow-lg" />
+            </div>
+            <div className="p-3 bg-slate-950 text-center">
+              <button
+                type="button"
+                onClick={() => setPreviewPhotoUrl(null)}
+                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition-colors"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

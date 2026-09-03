@@ -130,6 +130,43 @@ export const storageService = {
     return updatedItem;
   },
 
+  // 사장님 요청: 바코드 번호에 상품명을 사장님이 직접 입력/등록하여 마스터 및 발주대기에 영구 반영
+  registerProductName(barcode: string, newName: string): void {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+
+    // 1. 실사 목록(Audits)의 상품명 갱신 및 isUnmapped 해제
+    const audits = this.getAudits().map(a => {
+      if (a.barcode === barcode) {
+        return {
+          ...a,
+          productName: trimmed,
+          isUnmapped: false,
+        };
+      }
+      return a;
+    });
+    localStorage.setItem(KEYS.AUDITS, JSON.stringify(audits));
+
+    // 2. 마스터 상품(Products) 목록에 추가 또는 이름 수정 (영구 보관)
+    const products = this.getProducts();
+    const existingIdx = products.findIndex(p => p.barcode === barcode);
+    if (existingIdx >= 0) {
+      products[existingIdx].name = trimmed;
+    } else {
+      products.unshift({
+        barcode,
+        name: trimmed,
+        category: '미등록신상품',
+        price: 0,
+        cost: 0,
+        targetStock: 10,
+        minOrderQty: 1,
+      });
+    }
+    this.saveProducts(products);
+  },
+
   deleteAudit(identifier: string): void {
     const audits = this.getAudits().filter(a => a.id !== identifier && a.barcode !== identifier);
     localStorage.setItem(KEYS.AUDITS, JSON.stringify(audits));
