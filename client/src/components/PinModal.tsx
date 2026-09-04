@@ -1,5 +1,5 @@
-﻿import React, { useState } from 'react';
-import { Lock, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { X } from 'lucide-react';
 import { storageService } from '../services/storage';
 
 interface PinModalProps {
@@ -13,88 +13,85 @@ export const PinModal: React.FC<PinModalProps> = ({ onSuccess, onClose }) => {
   const settings = storageService.getSettings();
 
   const handleKeyPress = (digit: string) => {
-    if (pin.length < 4) {
-      const newPin = pin + digit;
-      setPin(newPin);
-      setError(false);
+    if (pin.length >= 4) return;
 
-      if (newPin.length === 4) {
-        if (newPin === settings.managerPin) {
-          onSuccess();
-        } else {
-          setError(true);
-          setTimeout(() => setPin(''), 500);
-        }
+    const newPin = pin + digit;
+    setPin(newPin);
+    setError(false);
+
+    if (newPin.length === 4) {
+      if (newPin === settings.managerPin) {
+        onSuccess();
+      } else {
+        setError(true);
+        setTimeout(() => setPin(''), 600);
       }
     }
   };
 
   const handleDelete = () => {
-    setPin(prev => prev.slice(0, -1));
+    setPin((prev) => prev.slice(0, -1));
     setError(false);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xs p-6 text-white shadow-2xl text-center">
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center space-x-2 text-blue-400">
-            <Lock className="w-5 h-5" />
-            <span className="font-bold text-sm">사장님 PIN 인증</span>
-          </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-1">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 backdrop-blur-[2px] p-5">
+      <div className="bg-surface rounded-3xl w-full max-w-xs p-6 shadow-xl animate-settle">
+        <div className="flex justify-between items-center">
+          <h2 className="text-[15px] font-medium text-ink">관리자 확인</h2>
+          <button
+            onClick={onClose}
+            aria-label="닫기"
+            className="w-9 h-9 -mr-2 rounded-full text-ink-faint hover:text-ink hover:bg-sunken flex items-center justify-center transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <p className="text-xs text-slate-400 mb-6">사장님 전용 4자리 비밀번호를 입력해주세요.</p>
+        <p className="mt-1 text-[13px] text-ink-faint">비밀번호 네 자리</p>
 
-        {/* PIN 표시 동그라미 */}
-        <div className="flex justify-center space-x-3 mb-6">
+        {/* 입력 표시 */}
+        <div className="flex justify-center gap-3 my-7" role="status" aria-live="polite">
           {[0, 1, 2, 3].map((idx) => (
-            <div
+            <span
               key={idx}
-              className={`w-3.5 h-3.5 rounded-full transition-all ${
-                idx < pin.length
-                  ? error
-                    ? 'bg-rose-500 scale-110'
-                    : 'bg-blue-500 scale-110 shadow-sm shadow-blue-500/50'
-                  : 'bg-slate-700'
+              className={`w-2.5 h-2.5 rounded-full transition-colors ${
+                idx < pin.length ? (error ? 'bg-brick' : 'bg-sage') : 'bg-line'
               }`}
             />
           ))}
         </div>
 
         {error && (
-          <p className="text-xs text-rose-400 mb-4 animate-shake">
-            비밀번호가 일치하지 않습니다.
+          <p className="-mt-4 mb-5 text-center text-[13px] text-brick">
+            비밀번호가 맞지 않습니다
           </p>
         )}
 
-        {/* 3x4 키패드 */}
-        <div className="grid grid-cols-3 gap-2.5 max-w-[220px] mx-auto">
+        {/* 키패드 */}
+        <div className="grid grid-cols-3 gap-2">
           {['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'del'].map((key, i) => {
-            if (key === '') {
-              return <div key={i} />;
-            }
+            if (key === '') return <div key={i} />;
+
             if (key === 'del') {
               return (
                 <button
                   key={i}
                   type="button"
                   onClick={handleDelete}
-                  className="h-12 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-300 font-semibold text-xs transition-colors flex items-center justify-center"
+                  className="h-14 rounded-2xl text-[13px] font-medium text-ink-soft hover:bg-sunken transition-colors"
                 >
                   지움
                 </button>
               );
             }
+
             return (
               <button
                 key={i}
                 type="button"
                 onClick={() => handleKeyPress(key)}
-                className="h-12 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-blue-600 text-white font-bold text-lg transition-colors flex items-center justify-center shadow-xs"
+                className="h-14 rounded-2xl bg-sunken hover:bg-line text-xl text-ink tabular transition-colors"
               >
                 {key}
               </button>

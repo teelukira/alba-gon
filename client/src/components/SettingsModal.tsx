@@ -1,5 +1,5 @@
-﻿import React, { useState } from 'react';
-import { Settings, X, Save, Key, UserCheck, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { X } from 'lucide-react';
 import { storageService } from '../services/storage';
 
 interface SettingsModalProps {
@@ -31,113 +31,101 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
 
   const productCount = storageService.getProducts().length;
 
+  const fieldClass =
+    'w-full h-11 px-3.5 rounded-xl bg-canvas border border-line text-[15px] text-ink placeholder:text-ink-faint focus:outline-none focus:border-sage-300 transition-colors';
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 text-white shadow-2xl">
-        <div className="flex justify-between items-center mb-5 pb-3 border-b border-slate-800">
-          <div className="flex items-center space-x-2 text-blue-400">
-            <Settings className="w-5 h-5" />
-            <h3 className="font-bold text-base">공용폰 & 시스템 설정</h3>
-          </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-1">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink/30 backdrop-blur-[2px] p-0 sm:p-5">
+      <div className="bg-surface rounded-t-3xl sm:rounded-3xl w-full max-w-md shadow-xl animate-rise max-h-[92vh] overflow-y-auto">
+        <div className="p-6 pb-4 flex justify-between items-center gap-4">
+          <h2 className="text-lg font-semibold text-ink">설정</h2>
+          <button
+            onClick={onClose}
+            aria-label="닫기"
+            className="w-9 h-9 -mr-2 rounded-full text-ink-faint hover:text-ink hover:bg-sunken flex items-center justify-center shrink-0 transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSave} className="space-y-4 text-xs">
-          {/* 유앤미 계정 설정 */}
-          <div className="bg-slate-800/80 p-3.5 rounded-xl border border-slate-700/60 space-y-3">
-            <div className="flex items-center space-x-1.5 text-blue-300 font-semibold">
-              <Key className="w-4 h-4" />
-              <span>유앤미24 (younme24.com) 자동발주 계정</span>
+        <form onSubmit={handleSave} className="px-6 pb-6 space-y-6">
+          {/* 유앤미24 계정 */}
+          <div className="space-y-3">
+            <div>
+              <h3 className="text-sm font-medium text-ink">유앤미24 계정</h3>
+              <p className="mt-1 text-[13px] text-ink-faint leading-relaxed break-keep">
+                발주를 넣을 때 사용합니다. 비밀번호를 아는 사람만 열 수 있습니다.
+              </p>
             </div>
-            <p className="text-[11px] text-slate-400">
-              공용폰에 저장해두면 사장님이 원클릭으로 자동 발주를 넣을 때 사용됩니다. 알바는 PIN 번호가 없어 열람할 수 없습니다.
-            </p>
 
-            <div className="space-y-2">
-              <div>
-                <label className="block text-slate-300 mb-1 font-medium">유앤미24 아이디</label>
+            <div className="space-y-2.5">
+              <label className="block">
+                <span className="block mb-1.5 text-[13px] text-ink-soft">아이디</span>
                 <input
                   type="text"
                   value={younmeId}
                   onChange={(e) => setYounmeId(e.target.value)}
-                  placeholder="예: 11470 또는 사장님 아이디"
-                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500 font-mono"
+                  autoComplete="off"
+                  className={fieldClass}
                 />
-              </div>
-              <div>
-                <label className="block text-slate-300 mb-1 font-medium">유앤미24 비밀번호</label>
+              </label>
+              <label className="block">
+                <span className="block mb-1.5 text-[13px] text-ink-soft">비밀번호</span>
                 <input
                   type="password"
                   value={younmePw}
                   onChange={(e) => setYounmePw(e.target.value)}
-                  placeholder="비밀번호 입력"
-                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500 font-mono"
+                  autoComplete="off"
+                  className={fieldClass}
                 />
-              </div>
+              </label>
             </div>
           </div>
 
-          {/* 사장님 보안 PIN 및 알바 설정 */}
+          <div className="h-px bg-line" />
+
+          {/* 매장 */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
-              <div className="flex items-center space-x-1.5 text-purple-300 font-semibold mb-1">
-                <ShieldCheck className="w-4 h-4" />
-                <span>사장님 PIN (4자리)</span>
-              </div>
+            <label className="block">
+              <span className="block mb-1.5 text-[13px] text-ink-soft">관리자 비밀번호</span>
               <input
                 type="password"
                 maxLength={4}
+                inputMode="numeric"
                 value={managerPin}
                 onChange={(e) => setManagerPin(e.target.value.replace(/[^0-9]/g, ''))}
-                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-center font-mono font-bold text-sm tracking-widest focus:outline-hidden focus:border-purple-500"
+                className={`${fieldClass} text-center tracking-[0.4em] tabular`}
               />
-            </div>
+            </label>
 
-            <div className="bg-slate-800/80 p-3 rounded-xl border border-slate-700/60">
-              <div className="flex items-center space-x-1.5 text-emerald-300 font-semibold mb-1">
-                <UserCheck className="w-4 h-4" />
-                <span>기본 알바 이름</span>
-              </div>
+            <label className="block">
+              <span className="block mb-1.5 text-[13px] text-ink-soft">근무자 이름</span>
               <input
                 type="text"
                 value={workerName}
                 onChange={(e) => setWorkerName(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-white focus:outline-hidden focus:border-emerald-500"
+                className={fieldClass}
               />
-            </div>
+            </label>
           </div>
 
-          {/* 현재 등록 상품 수 */}
-          <div className="flex items-center justify-between text-[11px] text-slate-400 px-1">
-            <span>마스터 DB 상품 수: <strong className="text-blue-400">{productCount}개</strong> (엑셀 자동탑재)</span>
-            <span className="text-slate-500">호스팅 비용: ₩0 (무료)</span>
-          </div>
+          <p className="text-[13px] text-ink-faint">
+            등록된 상품 <span className="tabular">{productCount}</span>개
+          </p>
 
-          <div className="flex space-x-2 pt-2">
+          <div className="flex items-center gap-2 pt-1">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 font-semibold text-slate-300 transition-colors"
+              className="h-12 px-5 rounded-full text-sm font-medium text-ink-soft hover:bg-sunken transition-colors"
             >
               닫기
             </button>
             <button
               type="submit"
-              className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 font-semibold text-white transition-colors flex items-center justify-center space-x-1.5 shadow-sm"
+              className="flex-1 h-12 rounded-full bg-sage hover:bg-sage-deep text-white text-sm font-medium transition-colors"
             >
-              {saved ? (
-                <>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-                  <span>저장 완료!</span>
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  <span>설정 저장하기</span>
-                </>
-              )}
+              {saved ? '저장했습니다' : '저장'}
             </button>
           </div>
         </form>

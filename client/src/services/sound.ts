@@ -1,81 +1,25 @@
-﻿// Web Audio API를 사용한 편의점 포스기 비프음 합성기
-class SoundManager {
-  private audioCtx: AudioContext | null = null;
-
-  private init() {
-    if (!this.audioCtx && typeof window !== 'undefined') {
-      const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (AudioCtxClass) {
-        this.audioCtx = new AudioCtxClass();
+// 스캔 피드백은 진동으로만 준다.
+// 매장이 시끄러워도 손끝으로 인식 성공을 알 수 있고, 손님 앞에서 소리가 나지 않는다.
+class FeedbackManager {
+  private vibrate(pattern: number | number[]) {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(pattern);
       }
+    } catch {
+      // 진동을 지원하지 않는 기기는 그냥 넘어간다
     }
   }
 
-  // 바코드 스캔 성공음 (맑고 경쾌한 삑!)
+  // 바코드 인식 성공 – 짧게 한 번
   playScanSuccess() {
-    try {
-      this.init();
-      if (!this.audioCtx) return;
-      if (this.audioCtx.state === 'suspended') {
-        this.audioCtx.resume();
-      }
-      const osc = this.audioCtx.createOscillator();
-      const gain = this.audioCtx.createGain();
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(1760, this.audioCtx.currentTime); // A6 (1760Hz)
-      osc.frequency.exponentialRampToValueAtTime(2349, this.audioCtx.currentTime + 0.08); // D7
-
-      gain.gain.setValueAtTime(0.3, this.audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.1);
-
-      osc.connect(gain);
-      gain.connect(this.audioCtx.destination);
-
-      osc.start();
-      osc.stop(this.audioCtx.currentTime + 0.1);
-
-      // 모바일 진동 햅틱 피드백
-      if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate(50);
-      }
-    } catch {
-      // ignore
-    }
+    this.vibrate(40);
   }
 
-  // 미등록 상품 감지음 (경고성 2음 띡-띡)
+  // 미등록 상품 – 두 번 끊어서, 확인이 필요하다는 신호
   playAlert() {
-    try {
-      this.init();
-      if (!this.audioCtx) return;
-      if (this.audioCtx.state === 'suspended') {
-        this.audioCtx.resume();
-      }
-      const now = this.audioCtx.currentTime;
-      const osc = this.audioCtx.createOscillator();
-      const gain = this.audioCtx.createGain();
-
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(880, now);
-      osc.frequency.setValueAtTime(659, now + 0.1);
-
-      gain.gain.setValueAtTime(0.4, now);
-      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
-
-      osc.connect(gain);
-      gain.connect(this.audioCtx.destination);
-
-      osc.start(now);
-      osc.stop(now + 0.25);
-
-      if (typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate([100, 50, 100]);
-      }
-    } catch {
-      // ignore
-    }
+    this.vibrate([60, 60, 60]);
   }
 }
 
-export const soundManager = new SoundManager();
+export const soundManager = new FeedbackManager();

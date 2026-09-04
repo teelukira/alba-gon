@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { Store, Shield, Settings, User } from 'lucide-react';
 import { PinModal } from './PinModal';
 import { SettingsModal } from './SettingsModal';
@@ -40,55 +40,47 @@ export const Header: React.FC<HeaderProps> = ({ currentMode, onSwitchMode, title
 
   return (
     <>
-      <header className="bg-slate-900 text-white sticky top-0 z-30 shadow-md border-b border-slate-800">
-        <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center space-x-2.5">
-            <div className="bg-blue-600 p-2 rounded-xl text-white shadow-sm">
-              <Store className="w-5 h-5" />
+      <header className="bg-surface/85 backdrop-blur-md sticky top-0 z-30 border-b border-line">
+        <div className="max-w-5xl mx-auto px-5 sm:px-6 h-16 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-full bg-sage-50 text-sage flex items-center justify-center shrink-0">
+              <Store className="w-[18px] h-[18px]" />
             </div>
-            <div>
-              <div className="flex items-center space-x-1.5">
-                <span className="font-bold text-base tracking-tight text-white">편의점 알바곤</span>
-                <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${
-                  currentMode === 'WORKER' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                }`}>
-                  {currentMode === 'WORKER' ? '알바 재고실사 모드' : '사장님 관리자 모드'}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 font-medium">
-                {title || (currentMode === 'WORKER' ? '공용폰 실시간 바코드 스캔' : '월/목 22시 재고 & 유앤미24 발주')}
+            <div className="min-w-0">
+              <h1 className="font-semibold text-[15px] text-ink truncate">알바곤</h1>
+              <p className="text-[13px] text-ink-faint truncate">
+                {title || (currentMode === 'WORKER' ? '재고 실사' : '재고 · 발주 관리')}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-2">
-            {/* 설정 버튼 (사장님 PIN 잠금) */}
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               onClick={handleSettingsClick}
-              title="유앤미 계정 및 시스템 설정"
-              className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              title="설정"
+              aria-label="설정"
+              className="w-9 h-9 rounded-full text-ink-faint hover:text-ink hover:bg-sunken flex items-center justify-center transition-colors"
             >
-              <Settings className="w-5 h-5" />
+              <Settings className="w-[18px] h-[18px]" />
             </button>
 
-            {/* 사장님 / 알바 모드 전환 버튼 */}
             <button
               onClick={handleAdminClick}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`flex items-center gap-2 h-9 px-4 rounded-full text-sm font-medium transition-colors ${
                 currentMode === 'ADMIN'
-                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
-                  : 'bg-blue-600 hover:bg-blue-500 text-white shadow-sm'
+                  ? 'text-ink-soft hover:text-ink hover:bg-sunken'
+                  : 'bg-sage text-white hover:bg-sage-deep'
               }`}
             >
               {currentMode === 'ADMIN' ? (
                 <>
-                  <User className="w-3.5 h-3.5" />
-                  <span>알바모드 복귀</span>
+                  <User className="w-4 h-4" />
+                  <span>실사 화면</span>
                 </>
               ) : (
                 <>
-                  <Shield className="w-3.5 h-3.5" />
-                  <span>사장님 모드</span>
+                  <Shield className="w-4 h-4" />
+                  <span>관리</span>
                 </>
               )}
             </button>
@@ -96,7 +88,6 @@ export const Header: React.FC<HeaderProps> = ({ currentMode, onSwitchMode, title
         </div>
       </header>
 
-      {/* PIN 인증 모달 */}
       {showPinModal && (
         <PinModal
           onSuccess={handlePinSuccess}
@@ -107,7 +98,6 @@ export const Header: React.FC<HeaderProps> = ({ currentMode, onSwitchMode, title
         />
       )}
 
-      {/* 유앤미 계정 설정 모달 */}
       {showSettingsModal && (
         <SettingsModal onClose={() => setShowSettingsModal(false)} />
       )}

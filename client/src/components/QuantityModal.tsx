@@ -1,5 +1,5 @@
-﻿import React, { useState } from 'react';
-import { Plus, Minus, Check, X, Tag, PackageCheck } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, Minus, X } from 'lucide-react';
 import { Product } from '../types';
 
 interface QuantityModalProps {
@@ -29,99 +29,88 @@ export const QuantityModal: React.FC<QuantityModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/75 backdrop-blur-xs p-0 sm:p-4 animate-fade-in">
-      <div className="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl w-full max-w-sm p-6 text-white shadow-2xl">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-md border border-emerald-800/60">
-              {barcode}
-            </span>
-            <h3 className="font-bold text-lg mt-1 text-white leading-tight">
-              {product ? product.name : '신규/미등록 상품'}
-            </h3>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink/25 backdrop-blur-[2px] p-0 sm:p-4">
+      <div className="bg-surface rounded-t-3xl sm:rounded-3xl w-full max-w-sm shadow-xl animate-rise">
+        <div className="p-6 pb-0 flex justify-between items-start gap-4">
+          <div className="min-w-0">
+            <p className="text-[13px] text-ink-faint tabular">{barcode}</p>
+            <h2 className="mt-1 text-xl font-semibold text-ink leading-snug break-keep">
+              {product ? product.name : '미등록 상품'}
+            </h2>
             {product && (
-              <div className="flex items-center space-x-2 text-xs text-slate-400 mt-1">
-                <span>단가 ₩{product.cost.toLocaleString()}</span>
-                <span>•</span>
-                <span>소비자가 ₩{product.price.toLocaleString()}</span>
-                <span>•</span>
-                <span className="text-blue-400 font-semibold">최소발주 {product.minOrderQty}개</span>
-              </div>
+              <p className="mt-1.5 text-[13px] text-ink-faint">
+                최소 발주 {product.minOrderQty}개 · 매입 {product.cost.toLocaleString()}원
+              </p>
             )}
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-1">
+          <button
+            onClick={onClose}
+            aria-label="닫기"
+            className="w-9 h-9 -mr-2 -mt-1 rounded-full text-ink-faint hover:text-ink hover:bg-sunken flex items-center justify-center shrink-0 transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* 수량 대형 디스플레이 */}
-          <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          {/* 수량 */}
+          <div className="flex items-center justify-between gap-4">
             <button
               type="button"
               onClick={() => handleAdjust(-1)}
-              className="w-12 h-12 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 flex items-center justify-center text-slate-200 transition-colors"
+              aria-label="수량 감소"
+              className="w-14 h-14 rounded-full bg-sunken hover:bg-line text-ink flex items-center justify-center shrink-0 transition-colors"
             >
               <Minus className="w-5 h-5" />
             </button>
 
-            <div className="text-center">
-              <span className="text-xs text-slate-500 font-medium block">현재 매장 재고</span>
+            <div className="text-center min-w-0">
               <input
                 type="number"
                 min="0"
                 value={quantity}
                 onChange={(e) => setQuantity(Math.max(0, parseInt(e.target.value) || 0))}
-                className="w-24 text-center font-bold text-4xl text-white bg-transparent focus:outline-hidden font-mono"
+                aria-label="재고 수량"
+                className="w-28 text-center text-5xl font-semibold text-ink bg-transparent focus:outline-none tabular"
               />
-              <span className="text-xs text-slate-400">개</span>
+              <p className="mt-1 text-[13px] text-ink-faint">현재 재고</p>
             </div>
 
             <button
               type="button"
               onClick={() => handleAdjust(1)}
-              className="w-12 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 flex items-center justify-center text-white transition-colors shadow-sm"
+              aria-label="수량 증가"
+              className="w-14 h-14 rounded-full bg-sage-50 hover:bg-sage-100 text-sage flex items-center justify-center shrink-0 transition-colors"
             >
               <Plus className="w-5 h-5" />
             </button>
           </div>
 
-          {/* 고속 증감 버튼들 (+1, +5, +10, 0개 세팅) */}
+          {/* 자주 쓰는 값 */}
           <div className="grid grid-cols-4 gap-2">
             {[
-              { label: '0개 (품절)', val: 0, setExact: true },
+              { label: '품절', val: 0, setExact: true },
               { label: '+1', val: 1 },
               { label: '+5', val: 5 },
               { label: '+10', val: 10 },
-            ].map((btn, idx) => (
+            ].map((btn) => (
               <button
-                key={idx}
+                key={btn.label}
                 type="button"
                 onClick={() => (btn.setExact ? setQuantity(0) : handleAdjust(btn.val))}
-                className="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-xs font-bold text-slate-200 transition-colors border border-slate-700/60"
+                className="h-11 rounded-xl bg-sunken hover:bg-line text-sm font-medium text-ink-soft transition-colors tabular"
               >
                 {btn.label}
               </button>
             ))}
           </div>
 
-          {/* 확인 / 저장 버튼 */}
-          <div className="pt-2 flex space-x-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-sm transition-colors"
-            >
-              취소
-            </button>
-            <button
-              type="submit"
-              className="flex-2 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold text-sm transition-colors flex items-center justify-center space-x-1.5 shadow-lg shadow-emerald-600/30"
-            >
-              <Check className="w-5 h-5" />
-              <span>재고 {quantity}개 저장 (다음 스캔)</span>
-            </button>
-          </div>
+          <button
+            type="submit"
+            className="w-full py-4 rounded-full bg-sage hover:bg-sage-deep text-white font-medium transition-colors"
+          >
+            저장하고 다음 스캔
+          </button>
         </form>
       </div>
     </div>

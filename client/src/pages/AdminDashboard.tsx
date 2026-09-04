@@ -1,21 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
   Package,
-  ShoppingCart,
-  AlertTriangle,
   FileSpreadsheet,
   ArrowRightLeft,
   Image as ImageIcon,
-  CheckCircle2,
   RefreshCw,
   Trash2,
-  Send,
-  AlertOctagon,
   Search,
-  Check,
-  Plus,
   Edit3,
   X,
+  AlertTriangle,
 } from 'lucide-react';
 import { AuditItem, Product, OrderItem, OrderFailure, BarcodeAlias } from '../types';
 import { storageService } from '../services/storage';
@@ -33,29 +27,26 @@ export const AdminDashboard: React.FC = () => {
   const [failures, setFailures] = useState<OrderFailure[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 발주 수량 임시 조정 맵 (barcode -> finalQty)
+  // 발주 수량 임시 조정 (barcode -> finalQty)
   const [customQuantities, setCustomQuantities] = useState<Record<string, number>>({});
 
-  // 클라우드 실시간 동기화 상태
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('DISCONNECTED');
   const [lastSyncTime, setLastSyncTime] = useState<string>('');
   const [isRefreshingSync, setIsRefreshingSync] = useState(false);
 
-  // 모달 상태
   const [showUnmappedModal, setShowUnmappedModal] = useState(false);
   const [showAliasModal, setShowAliasModal] = useState(false);
   const [aliasTargetBarcode, setAliasTargetBarcode] = useState('');
   const [showFailureModal, setShowFailureModal] = useState(false);
   const [showStockSetupModal, setShowStockSetupModal] = useState(false);
 
-  // 사장님 요청: 상품명이 없는 바코드 인라인 이름 입력/수정 상태
   const [editingBarcode, setEditingBarcode] = useState<string | null>(null);
   const [editingName, setEditingName] = useState<string>('');
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
 
-  // 발주 진행 상태
   const [isOrdering, setIsOrdering] = useState(false);
   const [orderProgress, setOrderProgress] = useState<OrderProgressEvent | null>(null);
+  const [tempFilter, setTempFilter] = useState<'ALL' | 'AMBIENT' | 'CHILLED'>('ALL');
 
   const loadData = () => {
     setAudits(storageService.getAudits());
@@ -67,10 +58,8 @@ export const AdminDashboard: React.FC = () => {
   useEffect(() => {
     loadData();
 
-    // 1. 클라우드 실시간 동기화 연결 (사장님 뷰)
     cloudSyncService.connect(undefined, 'ADMIN');
 
-    // 2. 알바가 바코드를 찍거나 수정하면 사장님 화면에 0.1초 만에 실시간 반영!
     const unsubSync = cloudSyncService.onSync((newAudits) => {
       setAudits(newAudits);
     });
@@ -86,36 +75,32 @@ export const AdminDashboard: React.FC = () => {
     };
   }, []);
 
-  const [tempFilter, setTempFilter] = useState<'ALL' | 'AMBIENT' | 'CHILLED'>('ALL');
-
-  // 발주 대상 품목 계산 (핵심: 최소 발주수량의 배수로만 주문!)
+  // 발주 대상 계산 — 부족분을 최소 발주단위의 배수로 올림
   const orderItems: OrderItem[] = audits.map((audit) => {
     const { product, alias } = storageService.findProduct(audit.barcode);
-    // ★ audit에 명시된 targetStock이 있으면 최우선 적용!
-    const targetStock = audit.targetStock !== undefined
-      ? audit.targetStock
-      : (product ? product.targetStock : 10);
 
-    // ★ audit에 명시된 minOrderQty가 있으면 최우선 적용!
-    const minOrderQty = audit.minOrderQty !== undefined
-      ? Math.max(1, audit.minOrderQty)
-      : (product ? Math.max(1, product.minOrderQty) : 1);
+    const targetStock =
+      audit.targetStock !== undefined ? audit.targetStock : product ? product.targetStock : 10;
 
-    // 부족분 계산 (목표 안전재고 - 실사재고)
+    const minOrderQty =
+      audit.minOrderQty !== undefined
+        ? Math.max(1, audit.minOrderQty)
+        : product
+          ? Math.max(1, product.minOrderQty)
+          : 1;
+
     const shortage = Math.max(0, targetStock - audit.stockCount);
 
-    // ★ 0보다 크면 최소 발주수량(minOrderQty)의 '배수'로 올림 계산!
-    const recommendedQty = shortage > 0
-      ? (shortage % minOrderQty === 0 ? shortage : Math.ceil(shortage / minOrderQty) * minOrderQty)
-      : 0;
+    const recommendedQty =
+      shortage > 0 ? Math.ceil(shortage / minOrderQty) * minOrderQty : 0;
 
-    // 사장님이 직접 수정한 수량이 있으면 사용, 없으면 추천 수량
-    const finalOrderQty = customQuantities[audit.barcode] !== undefined
-      ? customQuantities[audit.barcode]
-      : recommendedQty;
+    const finalOrderQty =
+      customQuantities[audit.barcode] !== undefined
+        ? customQuantities[audit.barcode]
+        : recommendedQty;
 
     const isBelowMinQty = finalOrderQty > 0 && finalOrderQty < minOrderQty;
-    const isNotMultiple = finalOrderQty > 0 && (finalOrderQty % minOrderQty !== 0);
+    const isNotMultiple = finalOrderQty > 0 && finalOrderQty % minOrderQty !== 0;
 
     return {
       barcode: audit.barcode,
@@ -134,59 +119,46 @@ export const AdminDashboard: React.FC = () => {
     };
   });
 
-  // 최종 주문할 품목들 (수량 > 0)
   const itemsToOrder = orderItems.filter((item) => item.finalOrderQty > 0);
 
-  // 최소 발주량으로 수량 즉시 올리기
-  // 최소 발주수량의 올바른 배수로 채우기 (보정)
   const handleSnapToMultiple = (barcode: string, val: number, minQty: number) => {
     const step = Math.max(1, minQty);
-    const snapped = Math.ceil(Math.max(1, val) / step) * step;
     setCustomQuantities((prev) => ({
       ...prev,
-      [barcode]: snapped,
+      [barcode]: Math.ceil(Math.max(1, val) / step) * step,
     }));
   };
 
-  // ★ 수량 증감 버튼 (+ / -): '최소 발주수량(minOrderQty)의 배수' 단위로만 증감!
-  const handleStepQty = (barcode: string, currentVal: number, minQty: number, direction: 1 | -1) => {
+  // 증감은 최소 발주단위 배수로만
+  const handleStepQty = (
+    barcode: string,
+    currentVal: number,
+    minQty: number,
+    direction: 1 | -1
+  ) => {
     const step = Math.max(1, minQty);
-    let next: number;
-    if (direction > 0) {
-      next = Math.floor(currentVal / step) * step + step;
-    } else {
-      next = Math.ceil(currentVal / step) * step - step;
-      if (next < 0) next = 0;
-    }
-    setCustomQuantities((prev) => ({
-      ...prev,
-      [barcode]: next,
-    }));
+    const next =
+      direction > 0
+        ? Math.floor(currentVal / step) * step + step
+        : Math.max(0, Math.ceil(currentVal / step) * step - step);
+
+    setCustomQuantities((prev) => ({ ...prev, [barcode]: next }));
   };
 
-  // 수량 직접 입력 핸들러
   const handleQuantityChange = (barcode: string, val: number) => {
-    setCustomQuantities((prev) => ({
-      ...prev,
-      [barcode]: Math.max(0, val),
-    }));
+    setCustomQuantities((prev) => ({ ...prev, [barcode]: Math.max(0, val) }));
   };
 
-  // ★ [요청 3 반영]: 사장님 뷰에서 목표 재고 수량(targetStock) 인라인 수정 핸들러
   const handleTargetStockChange = (barcode: string, val: number) => {
-    const safeVal = Math.max(0, val);
-    storageService.updateProductTargetStock(barcode, safeVal);
+    storageService.updateProductTargetStock(barcode, Math.max(0, val));
     loadData();
   };
 
-  // 사장님 요청: 최소 발주단위(MOQ) 실시간 인라인 수정 핸들러
   const handleMinOrderQtyChange = (barcode: string, val: number) => {
-    const safeVal = Math.max(1, val);
-    storageService.updateProductMinOrderQty(barcode, safeVal);
+    storageService.updateProductMinOrderQty(barcode, Math.max(1, val));
     loadData();
   };
 
-  // 사장님 요청: 발주 리스트에서 특정 상품 즉시 제외/삭제
   const handleRemoveFromOrder = (barcode: string) => {
     storageService.deleteAudit(barcode);
     const updated = storageService.getAudits();
@@ -194,16 +166,14 @@ export const AdminDashboard: React.FC = () => {
     cloudSyncService.broadcastAudits(updated, 'ADMIN');
   };
 
-  // 실사 목록 전체 초기화 (발주 후 새 실사 시작 시)
   const handleClearAllAudits = () => {
-    if (!confirm('현재 실사 목록을 모두 비우시겠습니까? 알바 폰의 실사 목록도 함께 리셋됩니다.')) return;
+    if (!confirm('실사 목록을 모두 비웁니다. 매장 폰의 목록도 함께 지워집니다.')) return;
     storageService.clearAudits();
     setCustomQuantities({});
     loadData();
     cloudSyncService.broadcastClear('ADMIN');
   };
 
-  // 클라우드 실사 데이터 수동 새로고침
   const handleRefreshCloudSync = () => {
     setIsRefreshingSync(true);
     cloudSyncService.connect(undefined, 'ADMIN');
@@ -211,10 +181,9 @@ export const AdminDashboard: React.FC = () => {
     setTimeout(() => setIsRefreshingSync(false), 600);
   };
 
-  // 사장님 요청: 상품명이 없는 바코드 인라인 입력 및 영구 마스터 저장
   const handleStartEditName = (barcode: string, currentName: string) => {
     setEditingBarcode(barcode);
-    setEditingName(currentName === '신규/미등록상품' ? '' : currentName);
+    setEditingName(currentName === '미등록 상품' ? '' : currentName);
   };
 
   const handleSaveName = (barcode: string) => {
@@ -227,20 +196,19 @@ export const AdminDashboard: React.FC = () => {
     setEditingName('');
   };
 
-  // 유앤미24 자동 발주 실행 (★ 모든 품목의 수량을 minOrderQty의 배수로 최종 검증/보정하여 전송)
   const handleStartOrder = async () => {
     if (itemsToOrder.length === 0) {
-      alert('발주할 상품이 없습니다. (발주 수량이 모두 0개입니다)');
+      alert('발주할 상품이 없습니다.');
       return;
     }
 
-    // ★ 모든 주문 품목이 최소 발주수량의 배수인지 최종 보정
+    // 전송 직전 모든 수량을 최소 발주단위 배수로 보정
     const sanitizedItems: OrderItem[] = itemsToOrder.map((item) => {
       const step = Math.max(1, item.minOrderQty);
-      const safeQty = item.finalOrderQty > 0 ? Math.ceil(item.finalOrderQty / step) * step : 0;
       return {
         ...item,
-        finalOrderQty: safeQty,
+        finalOrderQty:
+          item.finalOrderQty > 0 ? Math.ceil(item.finalOrderQty / step) * step : 0,
       };
     });
 
@@ -248,17 +216,17 @@ export const AdminDashboard: React.FC = () => {
     try {
       const ping = await fetch('http://localhost:3001/api/health');
       if (ping.ok) hasBot = true;
-    } catch {}
+    } catch {
+      // 봇이 꺼져 있으면 계정 정보로 진행
+    }
 
     const settings = storageService.getSettings();
     if (!hasBot && (!settings.younmeId || !settings.younmePw)) {
-      alert('유앤미24 아이디와 비밀번호가 비어있습니다. 우측 상단 톱니바퀴 설정에서 계정을 먼저 입력해주세요!');
+      alert('설정에서 유앤미24 계정을 먼저 입력해 주세요.');
       return;
     }
 
-    if (!confirm(`총 ${sanitizedItems.length}개 품목을 최소 발주단위 배수로 유앤미24에 자동 발주하시겠습니까?`)) {
-      return;
-    }
+    if (!confirm(`${sanitizedItems.length}개 품목을 유앤미24로 발주합니다.`)) return;
 
     setIsOrdering(true);
     setOrderProgress(null);
@@ -273,28 +241,25 @@ export const AdminDashboard: React.FC = () => {
         setShowFailureModal(true);
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : '발주 중 오류가 발생했습니다.';
-      alert(msg);
+      alert(e instanceof Error ? e.message : '발주 중 오류가 발생했습니다.');
     } finally {
       setIsOrdering(false);
     }
   };
 
-  // 엑셀 파일 업로드 파싱
   const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
       const result = await storageService.importExcelFile(file);
-      alert(`성공적으로 엑셀을 불러왔습니다! (총 ${result.count}개 처리, 신규 상품 등록 완료)`);
+      alert(`${result.count}개 상품을 불러왔습니다.`);
       loadData();
-    } catch (err) {
-      alert('엑셀 파일을 읽는 도중 오류가 발생했습니다.');
+    } catch {
+      alert('엑셀 파일을 읽지 못했습니다.');
     }
   };
 
-  // 미등록 상품 수
   const unmappedAudits = audits.filter((a) => a.isUnmapped);
 
   const filteredItems = orderItems.filter((item) => {
@@ -302,7 +267,9 @@ export const AdminDashboard: React.FC = () => {
       item.productName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.barcode.includes(searchQuery);
 
-    const isChilled = Boolean(item.category?.includes('냉동') || item.category?.includes('저온'));
+    const isChilled = Boolean(
+      item.category?.includes('냉동') || item.category?.includes('저온')
+    );
     let matchesTemp = true;
     if (tempFilter === 'AMBIENT') matchesTemp = !isChilled;
     if (tempFilter === 'CHILLED') matchesTemp = isChilled;
@@ -310,173 +277,108 @@ export const AdminDashboard: React.FC = () => {
     return matchesSearch && matchesTemp;
   });
 
+  const isConnected = syncStatus === 'CONNECTED';
+
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-6 pb-24">
-      {/* 0. ★ [요청 1 반영]: 알바 폰 ↔ 사장님 폰 실시간 클라우드 동기화 배너 */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-        <div className="flex items-center space-x-2.5">
-          <div
-            className={`w-3 h-3 rounded-full animate-pulse shrink-0 ${
-              syncStatus === 'CONNECTED' ? 'bg-emerald-400 shadow-xs shadow-emerald-400/50' : 'bg-amber-400'
-            }`}
-          />
+    <div className="max-w-6xl mx-auto px-5 sm:px-6 py-8 space-y-8 pb-24">
+      {/* 요약 */}
+      <section className="flex flex-wrap items-end justify-between gap-x-8 gap-y-5">
+        <div className="flex flex-wrap items-end gap-x-10 gap-y-5">
           <div>
-            <div className="flex items-center space-x-2">
-              <span className="font-bold text-white text-xs">
-                {syncStatus === 'CONNECTED' ? '알바 스마트폰과 실시간 연동 중' : '클라우드 릴레이 연결 중..'}
-              </span>
-              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.2 rounded-full font-medium">
-                기기 간 실시간 자동 공유
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400 mt-0.5">
-              알바가 매장에서 바코드를 찍으면 사장님 화면에 즉시 나타납니다.
-              {lastSyncTime && <span className="text-slate-500 ml-1.5">(최근 동기화: {lastSyncTime})</span>}
+            <p className="text-sm text-ink-faint">실사 품목</p>
+            <p className="mt-1 text-[32px] leading-none font-semibold text-ink tabular">
+              {audits.length}
             </p>
           </div>
+
+          <div>
+            <p className="text-sm text-ink-faint">발주 예정</p>
+            <p className="mt-1 text-[32px] leading-none font-semibold text-sage tabular">
+              {itemsToOrder.length}
+            </p>
+          </div>
+
+          {unmappedAudits.length > 0 && (
+            <button
+              onClick={() => setShowUnmappedModal(true)}
+              className="text-left group"
+            >
+              <p className="text-sm text-ink-faint group-hover:text-ink-soft transition-colors">
+                이름 없는 상품
+              </p>
+              <p className="mt-1 text-[32px] leading-none font-semibold text-clay tabular underline decoration-clay/30 underline-offset-4">
+                {unmappedAudits.length}
+              </p>
+            </button>
+          )}
+
+          {failures.length > 0 && (
+            <button onClick={() => setShowFailureModal(true)} className="text-left group">
+              <p className="text-sm text-ink-faint group-hover:text-ink-soft transition-colors">
+                발주 실패
+              </p>
+              <p className="mt-1 text-[32px] leading-none font-semibold text-brick tabular underline decoration-brick/30 underline-offset-4">
+                {failures.length}
+              </p>
+            </button>
+          )}
         </div>
 
-        <div className="flex items-center space-x-2 self-end sm:self-auto shrink-0">
+        <div className="flex items-center gap-4 text-[13px] text-ink-faint">
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-sage' : 'bg-clay'}`}
+              aria-hidden
+            />
+            {isConnected ? '매장과 연결됨' : '연결 중'}
+            {lastSyncTime && ` · ${lastSyncTime}`}
+          </span>
           <button
             type="button"
             onClick={handleRefreshCloudSync}
             disabled={isRefreshingSync}
-            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 font-semibold text-xs transition-colors flex items-center space-x-1.5"
-            title="알바가 찍은 최신 실사 불러오기"
+            className="inline-flex items-center gap-1.5 hover:text-ink transition-colors"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingSync ? 'animate-spin' : ''}`} />
-            <span>최신 동기화</span>
+            새로고침
           </button>
-          {audits.length > 0 && (
-            <button
-              type="button"
-              onClick={handleClearAllAudits}
-              className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-300 border border-slate-700/80 font-medium text-xs transition-colors"
-              title="실사 목록 비우기 (새 실사 시작)"
-            >
-              실사 초기화
-            </button>
-          )}
         </div>
-      </div>
+      </section>
 
-      {/* 1. 상단 대시보드 요약 및 빠른 액션 바 */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-        {/* 오늘 실사 재고 품목 */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-          <div className="flex justify-between items-start text-slate-400">
-            <span>실사 품목</span>
-            <Package className="w-4 h-4 text-blue-400" />
-          </div>
-          <div className="mt-2">
-            <span className="text-2xl font-bold text-white">{audits.length}</span>
-            <span className="text-[11px] text-slate-500 ml-1">개 확인됨</span>
-          </div>
-        </div>
-
-        {/* 발주 예정 품목 */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between">
-          <div className="flex justify-between items-start text-slate-400">
-            <span>발주 예정</span>
-            <ShoppingCart className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="mt-2">
-            <span className="text-2xl font-bold text-emerald-400">{itemsToOrder.length}</span>
-            <span className="text-[11px] text-slate-500 ml-1">개 품목</span>
-          </div>
-        </div>
-
-        {/* 미등록 상품 사진 검수 카드 */}
-        <button
-          onClick={() => setShowUnmappedModal(true)}
-          className={`rounded-2xl p-4 flex flex-col justify-between text-left transition-all border ${
-            unmappedAudits.length > 0
-              ? 'bg-amber-950/30 border-amber-500/50 hover:border-amber-400'
-              : 'bg-slate-900 border-slate-800 hover:border-slate-700'
-          }`}
-        >
-          <div className="flex justify-between items-start text-slate-400">
-            <span>미등록 사진 검수</span>
-            <ImageIcon className={`w-4 h-4 ${unmappedAudits.length > 0 ? 'text-amber-400' : 'text-slate-500'}`} />
-          </div>
-          <div className="mt-2 flex items-center justify-between">
-            <span className={`text-2xl font-bold ${unmappedAudits.length > 0 ? 'text-amber-400' : 'text-slate-400'}`}>
-              {unmappedAudits.length}
-            </span>
-            {unmappedAudits.length > 0 && (
-              <span className="text-[10px] bg-amber-500 text-slate-950 font-bold px-2 py-0.5 rounded-full">
-                이름 등록
-              </span>
-            )}
-          </div>
-        </button>
-
-        {/* 발주 실패 관리함 카드 */}
-        <button
-          onClick={() => setShowFailureModal(true)}
-          className={`rounded-2xl p-4 flex flex-col justify-between text-left transition-all border ${
-            failures.length > 0
-              ? 'bg-rose-950/40 border-rose-500/60 hover:border-rose-400 animate-pulse'
-              : 'bg-slate-900 border-slate-800 hover:border-slate-700'
-          }`}
-        >
-          <div className="flex justify-between items-start text-slate-400">
-            <span>발주 실패 관리함</span>
-            <AlertOctagon className={`w-4 h-4 ${failures.length > 0 ? 'text-rose-400' : 'text-slate-500'}`} />
-          </div>
-          <div className="mt-2 flex items-center justify-between">
-            <span className={`text-2xl font-bold ${failures.length > 0 ? 'text-rose-400' : 'text-slate-400'}`}>
-              {failures.length}
-            </span>
-            {failures.length > 0 && (
-              <span className="text-[10px] bg-rose-500 text-white font-bold px-2 py-0.5 rounded-full">
-                조치 필요
-              </span>
-            )}
-          </div>
-        </button>
-      </div>
-
-      {/* 2. 사장님 핵심 제어판 (발주 실행 버튼 + 관리 도구들) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center space-x-2">
-            <h2 className="text-lg font-bold text-white">유앤미24 원클릭 자동 발주</h2>
-            <span className="text-[11px] bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full font-semibold">
-              월/목 22시 정기발주
-            </span>
-          </div>
-          <p className="text-xs text-slate-400 mt-1">
-            알바가 스캔한 재고를 기준으로 추천 수량이 산출되었습니다. 최소 발주량을 확인하고 발주를 실행하세요.
+      {/* 발주 실행 */}
+      <section className="bg-surface border border-line rounded-2xl p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold text-ink">유앤미24 발주</h2>
+          <p className="mt-1 text-sm text-ink-soft leading-relaxed break-keep">
+            스캔한 재고를 기준으로 부족한 수량을 최소 발주단위의 배수로 계산했습니다.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* 제품별 추천 재고수량 셋업 버튼 */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <button
             onClick={() => setShowStockSetupModal(true)}
-            className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 hover:text-white border border-amber-500/30 text-xs font-semibold transition-colors flex items-center space-x-1.5"
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-medium text-ink-soft hover:text-ink hover:bg-sunken transition-colors"
           >
-            <Package className="w-4 h-4 text-amber-400" />
-            <span>제품별 추천재고 셋업 ({products.length})</span>
+            <Package className="w-4 h-4" />
+            목표 재고
+            <span className="text-ink-faint tabular">{products.length}</span>
           </button>
 
-          {/* 구형-신규 대체 바코드 관리 버튼 */}
           <button
             onClick={() => {
               setAliasTargetBarcode('');
               setShowAliasModal(true);
             }}
-            className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white border border-indigo-500/30 text-xs font-semibold transition-colors flex items-center space-x-1.5"
+            className="inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-medium text-ink-soft hover:text-ink hover:bg-sunken transition-colors"
           >
             <ArrowRightLeft className="w-4 h-4" />
-            <span>대체 바코드 ({aliases.length})</span>
+            대체 바코드
+            <span className="text-ink-faint tabular">{aliases.length}</span>
           </button>
 
-          {/* 엑셀 파일 업로드 버튼 */}
-          <label className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold cursor-pointer transition-colors flex items-center space-x-1.5">
-            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-            <span>발주 엑셀 업로드</span>
+          <label className="inline-flex items-center gap-2 h-10 px-4 rounded-full text-sm font-medium text-ink-soft hover:text-ink hover:bg-sunken cursor-pointer transition-colors">
+            <FileSpreadsheet className="w-4 h-4" />
+            엑셀 불러오기
             <input
               type="file"
               accept=".xls,.xlsx,.csv"
@@ -485,140 +387,117 @@ export const AdminDashboard: React.FC = () => {
             />
           </label>
 
-          {/* 메인 발주 실행 버튼 */}
           <button
             disabled={isOrdering || itemsToOrder.length === 0}
             onClick={handleStartOrder}
-            className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:bg-slate-800 disabled:text-slate-600 text-white font-bold text-xs transition-all shadow-lg shadow-blue-600/30 flex items-center space-x-2"
+            className="h-10 px-6 rounded-full bg-sage hover:bg-sage-deep disabled:bg-sunken disabled:text-ink-faint text-white text-sm font-medium transition-colors"
           >
-            {isOrdering ? (
-              <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                <span>발주 진행중...</span>
-              </>
-            ) : (
-              <>
-                <Send className="w-4 h-4" />
-                <span>유앤미24 자동 발주 ({itemsToOrder.length}건)</span>
-              </>
-            )}
+            {isOrdering ? '발주 중' : `${itemsToOrder.length}개 발주하기`}
           </button>
         </div>
-      </div>
+      </section>
 
-      {/* 3. 자동 발주 진행 프로그레스 바 (발주 중일 때 표시) */}
+      {/* 발주 진행 */}
       {orderProgress && (
-        <div className="bg-slate-900 border border-blue-500/50 rounded-2xl p-4 text-white shadow-xl animate-fade-in space-y-2">
-          <div className="flex justify-between items-center text-xs">
-            <span className="font-semibold text-blue-300 flex items-center space-x-1.5">
-              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              <span>{orderProgress.message}</span>
-            </span>
-            <span className="font-mono font-bold text-blue-400">{orderProgress.percent}%</span>
+        <section className="bg-surface border border-line rounded-2xl p-5 space-y-3 animate-settle">
+          <div className="flex justify-between items-center gap-4 text-sm">
+            <span className="text-ink break-keep">{orderProgress.message}</span>
+            <span className="text-ink-faint tabular shrink-0">{orderProgress.percent}%</span>
           </div>
-          <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+          <div className="w-full h-1 bg-sunken rounded-full overflow-hidden">
             <div
-              className="h-full bg-blue-500 rounded-full transition-all duration-300 shadow-sm shadow-blue-500"
+              className="h-full bg-sage rounded-full transition-all duration-300"
               style={{ width: `${orderProgress.percent}%` }}
             />
           </div>
-        </div>
+        </section>
       )}
 
-      {/* 4. 재고 실사 및 발주 추천 테이블 */}
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-lg">
-        <div className="p-4 bg-slate-950 border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div className="flex items-center space-x-2">
-              <Package className="w-5 h-5 text-slate-400" />
-              <h3 className="font-bold text-sm text-white">매장 실사 재고 & 발주 목록</h3>
-            </div>
-
-            {/* 유앤미24 상온/저온 전용 발주 탭 */}
-            <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
+      {/* 목록 */}
+      <section className="space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-1 text-sm">
+            {(
+              [
+                ['ALL', '전체'],
+                ['AMBIENT', '상온'],
+                ['CHILLED', '냉장'],
+              ] as const
+            ).map(([key, label]) => (
               <button
-                onClick={() => setTempFilter('ALL')}
-                className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                  tempFilter === 'ALL' ? 'bg-blue-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'
+                key={key}
+                onClick={() => setTempFilter(key)}
+                className={`h-9 px-4 rounded-full font-medium transition-colors ${
+                  tempFilter === key
+                    ? 'bg-ink text-white'
+                    : 'text-ink-soft hover:bg-sunken'
                 }`}
               >
-                전체 ({orderItems.length})
+                {label}
               </button>
+            ))}
+            {audits.length > 0 && (
               <button
-                onClick={() => setTempFilter('AMBIENT')}
-                className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                  tempFilter === 'AMBIENT' ? 'bg-amber-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'
-                }`}
+                onClick={handleClearAllAudits}
+                className="h-9 px-4 rounded-full font-medium text-ink-faint hover:text-brick hover:bg-brick-soft transition-colors"
               >
-                상온상품 (/app1/)
+                목록 비우기
               </button>
-              <button
-                onClick={() => setTempFilter('CHILLED')}
-                className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
-                  tempFilter === 'CHILLED' ? 'bg-cyan-600 text-white font-bold' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                저온냉장 (/app3/)
-              </button>
-            </div>
+            )}
           </div>
 
-          <div className="relative w-full md:w-60">
-            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+          <div className="relative w-full md:w-72">
+            <Search className="w-4 h-4 text-ink-faint absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="상품명 또는 바코드 검색..."
+              placeholder="상품명 또는 바코드"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:outline-hidden"
+              aria-label="상품 검색"
+              className="w-full h-10 pl-10 pr-4 rounded-full bg-surface border border-line text-sm text-ink placeholder:text-ink-faint focus:outline-none focus:border-sage-300 transition-colors"
             />
           </div>
         </div>
 
         {filteredItems.length === 0 ? (
-          <div className="p-12 text-center text-slate-500 text-xs">
-            {orderItems.length === 0 ? '알바가 스캔한 재고 실사 데이터가 없습니다.' : '검색 결과가 없습니다.'}
-          </div>
+          <p className="py-16 text-center text-sm text-ink-faint">
+            {orderItems.length === 0
+              ? '매장에서 스캔한 재고가 아직 없습니다'
+              : '검색 결과가 없습니다'}
+          </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-300">
-              <thead className="bg-slate-950/80 text-slate-400 font-semibold border-b border-slate-800 text-[11px]">
-                <tr>
-                  <th className="p-3.5">바코드 / 대체</th>
-                  <th className="p-3.5">상품명</th>
-                  <th className="p-3.5 text-center">알바 실사 재고</th>
-                  <th className="p-3.5 text-center text-amber-300">목표 안전재고</th>
-                  <th className="p-3.5 text-center text-blue-300">최소 발주단위</th>
-                  <th className="p-3.5 text-center">추천 수량 (배수)</th>
-                  <th className="p-3.5 text-right">최종 발주 수량</th>
-                  <th className="p-3.5 text-center">발주제외</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800">
-                {filteredItems.map((item) => (
-                  <tr key={item.barcode} className="hover:bg-slate-800/40 transition-colors">
-                    {/* 바코드 */}
-                    <td className="p-3.5 font-mono text-[11px]">
-                      <div className="space-y-0.5">
-                        <span className="text-slate-300">{item.barcode}</span>
-                        {item.usingAliasBarcode && (
-                          <div className="flex items-center space-x-1 text-emerald-400 text-[10px]">
-                            <ArrowRightLeft className="w-3 h-3" />
-                            <span>대체: {item.usingAliasBarcode}</span>
-                          </div>
-                        )}
-                      </div>
-                    </td>
+          <div className="bg-surface border border-line rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="text-[13px] text-ink-faint border-b border-line">
+                    <th className="font-medium px-5 py-3">상품</th>
+                    <th className="font-medium px-3 py-3 text-right whitespace-nowrap">재고</th>
+                    <th className="font-medium px-3 py-3 text-center whitespace-nowrap">목표</th>
+                    <th className="font-medium px-3 py-3 text-center whitespace-nowrap">
+                      발주단위
+                    </th>
+                    <th className="font-medium px-3 py-3 text-right whitespace-nowrap">추천</th>
+                    <th className="font-medium px-3 py-3 text-center whitespace-nowrap">
+                      발주 수량
+                    </th>
+                    <th className="px-3 py-3">
+                      <span className="sr-only">제외</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {filteredItems.map((item) => {
+                    const audit = audits.find((a) => a.barcode === item.barcode);
+                    const isUnregistered =
+                      item.productName === '미등록 상품' || !item.productName;
 
-                    {/* 사장님 요청: 상품명이 없는 바코드 인라인 입력 및 사진 확인 */}
-                    <td className="p-3.5 font-medium text-white">
-                      {(() => {
-                        const audit = audits.find((a) => a.barcode === item.barcode);
-                        const isUnregistered = item.productName === '신규/미등록 상품' || !item.productName;
-
-                        if (editingBarcode === item.barcode) {
-                          return (
-                            <div className="flex items-center space-x-1.5 animate-fade-in">
+                    return (
+                      <tr key={item.barcode} className="hover:bg-canvas/60 transition-colors">
+                        {/* 상품 */}
+                        <td className="px-5 py-3 max-w-md">
+                          {editingBarcode === item.barcode ? (
+                            <div className="flex items-center gap-2">
                               <input
                                 type="text"
                                 value={editingName}
@@ -627,216 +506,213 @@ export const AdminDashboard: React.FC = () => {
                                   if (e.key === 'Enter') handleSaveName(item.barcode);
                                   if (e.key === 'Escape') setEditingBarcode(null);
                                 }}
-                                placeholder="상품명 입력 (예: 농심 짜파게티)"
+                                placeholder="상품명"
                                 autoFocus
-                                className="px-2.5 py-1 text-xs rounded-lg bg-slate-950 border border-emerald-500 text-white font-medium focus:outline-hidden w-48 shadow-inner"
+                                className="flex-1 min-w-0 h-9 px-3 rounded-lg bg-canvas border border-sage-300 text-sm text-ink focus:outline-none"
                               />
                               <button
                                 type="button"
                                 onClick={() => handleSaveName(item.barcode)}
-                                className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-bold rounded-lg shrink-0 transition-colors shadow-xs"
+                                className="h-9 px-3 rounded-lg bg-sage hover:bg-sage-deep text-white text-[13px] font-medium shrink-0 transition-colors"
                               >
                                 저장
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setEditingBarcode(null)}
-                                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-400 text-[11px] rounded-lg shrink-0 transition-colors"
+                                className="h-9 px-2 text-[13px] text-ink-faint hover:text-ink shrink-0 transition-colors"
                               >
                                 취소
                               </button>
                             </div>
-                          );
-                        }
+                          ) : (
+                            <div className="flex items-center gap-2.5 group">
+                              {audit?.photoUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewPhotoUrl(audit.photoUrl!)}
+                                  className="w-9 h-9 rounded-lg overflow-hidden border border-line shrink-0"
+                                  aria-label="촬영한 사진 보기"
+                                >
+                                  <img
+                                    src={audit.photoUrl}
+                                    alt=""
+                                    className="w-full h-full object-cover"
+                                  />
+                                </button>
+                              )}
 
-                        return (
-                          <div className="flex items-center space-x-2 group">
-                            {/* 알바가 찍은 실물 사진 썸네일 미리보기 */}
-                            {audit?.photoUrl && (
+                              <span className="min-w-0">
+                                <span
+                                  className={`block leading-snug break-keep ${
+                                    isUnregistered ? 'text-clay' : 'text-ink'
+                                  }`}
+                                >
+                                  {item.productName}
+                                </span>
+                                <span className="block mt-0.5 text-[13px] text-ink-faint tabular">
+                                  {item.barcode}
+                                  {item.usingAliasBarcode && ` → ${item.usingAliasBarcode}`}
+                                </span>
+                              </span>
+
                               <button
                                 type="button"
-                                onClick={() => setPreviewPhotoUrl(audit.photoUrl!)}
-                                className="w-8 h-8 rounded-lg overflow-hidden border-2 border-amber-500/80 hover:border-amber-400 shrink-0 shadow-sm relative group/pic cursor-pointer"
-                                title="알바가 찍은 실물 사진 크게 보기"
+                                onClick={() =>
+                                  handleStartEditName(item.barcode, item.productName)
+                                }
+                                aria-label="상품명 수정"
+                                className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all ${
+                                  isUnregistered
+                                    ? 'text-clay hover:bg-clay-soft'
+                                    : 'text-ink-faint hover:text-ink hover:bg-sunken opacity-0 group-hover:opacity-100 focus:opacity-100'
+                                }`}
                               >
-                                <img src={audit.photoUrl} alt="실물 사진" className="w-full h-full object-cover" />
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+
+                        {/* 재고 */}
+                        <td className="px-3 py-3 text-right text-ink tabular whitespace-nowrap">
+                          {item.currentStock}
+                        </td>
+
+                        {/* 목표 재고 */}
+                        <td className="px-3 py-3 text-center">
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.targetStock}
+                            onChange={(e) =>
+                              handleTargetStockChange(
+                                item.barcode,
+                                parseInt(e.target.value) || 0
+                              )
+                            }
+                            aria-label="목표 재고"
+                            className="w-14 h-9 text-center rounded-lg bg-canvas border border-line text-ink tabular focus:outline-none focus:border-sage-300 transition-colors"
+                          />
+                        </td>
+
+                        {/* 최소 발주단위 */}
+                        <td className="px-3 py-3 text-center">
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.minOrderQty}
+                            onChange={(e) =>
+                              handleMinOrderQtyChange(
+                                item.barcode,
+                                parseInt(e.target.value) || 1
+                              )
+                            }
+                            aria-label="최소 발주단위"
+                            className="w-14 h-9 text-center rounded-lg bg-canvas border border-line text-ink tabular focus:outline-none focus:border-sage-300 transition-colors"
+                          />
+                        </td>
+
+                        {/* 추천 */}
+                        <td className="px-3 py-3 text-right tabular whitespace-nowrap">
+                          <span className={item.recommendedQty > 0 ? 'text-ink' : 'text-ink-faint'}>
+                            {item.recommendedQty}
+                          </span>
+                        </td>
+
+                        {/* 발주 수량 */}
+                        <td className="px-3 py-3">
+                          <div className="flex flex-col items-center gap-1.5">
+                            <div className="inline-flex items-center rounded-full border border-line overflow-hidden">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleStepQty(
+                                    item.barcode,
+                                    item.finalOrderQty,
+                                    item.minOrderQty,
+                                    -1
+                                  )
+                                }
+                                disabled={item.finalOrderQty <= 0}
+                                aria-label={`${item.minOrderQty}개 감소`}
+                                className="w-9 h-9 text-ink-soft hover:bg-sunken disabled:text-ink-faint disabled:hover:bg-transparent transition-colors"
+                              >
+                                −
+                              </button>
+                              <input
+                                type="number"
+                                min="0"
+                                step={item.minOrderQty}
+                                value={item.finalOrderQty}
+                                onChange={(e) =>
+                                  handleQuantityChange(
+                                    item.barcode,
+                                    parseInt(e.target.value) || 0
+                                  )
+                                }
+                                aria-label="발주 수량"
+                                className={`w-14 h-9 text-center bg-transparent tabular focus:outline-none ${
+                                  item.finalOrderQty > 0 ? 'text-ink font-medium' : 'text-ink-faint'
+                                }`}
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleStepQty(
+                                    item.barcode,
+                                    item.finalOrderQty,
+                                    item.minOrderQty,
+                                    1
+                                  )
+                                }
+                                aria-label={`${item.minOrderQty}개 증가`}
+                                className="w-9 h-9 text-ink-soft hover:bg-sunken transition-colors"
+                              >
+                                +
+                              </button>
+                            </div>
+
+                            {item.isBelowMinQty && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleSnapToMultiple(
+                                    item.barcode,
+                                    item.finalOrderQty,
+                                    item.minOrderQty
+                                  )
+                                }
+                                className="inline-flex items-center gap-1 text-[13px] text-clay hover:underline whitespace-nowrap"
+                              >
+                                <AlertTriangle className="w-3 h-3 shrink-0" />
+                                {item.minOrderQty}개 단위로 맞추기
                               </button>
                             )}
-
-                            <span className={isUnregistered ? 'text-amber-400 font-bold' : 'text-white'}>
-                              {item.productName}
-                            </span>
-
-                            {/* 상품명 입력/수정 버튼 */}
-                            <button
-                              type="button"
-                              onClick={() => handleStartEditName(item.barcode, item.productName)}
-                              className={`px-2 py-0.5 rounded-lg text-[10px] flex items-center space-x-1 transition-all ${
-                                isUnregistered
-                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 hover:bg-amber-500/40 font-bold shadow-xs'
-                                  : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800 opacity-80 group-hover:opacity-100'
-                              }`}
-                              title="상품명을 입력하면 마스터 DB에 영구 등록됩니다"
-                            >
-                              <Edit3 className="w-3 h-3" />
-                              <span>{isUnregistered ? '이름입력' : '수정'}</span>
-                            </button>
                           </div>
-                        );
-                      })()}
-                    </td>
+                        </td>
 
-                    {/* 실사 재고 */}
-                    <td className="p-3.5 text-center">
-                      <span className="px-2.5 py-1 rounded-lg bg-slate-800 font-mono font-bold text-slate-200">
-                        {item.currentStock}개
-                      </span>
-                    </td>
-
-                    {/* ★ [요청 3 반영]: 목표 안전재고 (사장님 뷰에서 인라인 수정 가능) */}
-                    <td className="p-3.5 text-center font-mono">
-                      <div className="inline-flex items-center space-x-1 bg-slate-950 border border-amber-500/40 rounded-xl px-1.5 py-0.5 shadow-inner">
-                        <button
-                          type="button"
-                          onClick={() => handleTargetStockChange(item.barcode, item.targetStock - 1)}
-                          className="w-4 h-4 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 flex items-center justify-center font-bold text-xs transition-colors"
-                          title="목표 재고 1 감소"
-                        >
-                          -
-                        </button>
-                        <input
-                          type="number"
-                          min="0"
-                          value={item.targetStock}
-                          onChange={(e) => handleTargetStockChange(item.barcode, parseInt(e.target.value) || 0)}
-                          className="w-10 text-center font-mono font-bold text-amber-300 bg-transparent text-xs focus:outline-hidden"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleTargetStockChange(item.barcode, item.targetStock + 1)}
-                          className="w-4 h-4 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 flex items-center justify-center font-bold text-xs transition-colors"
-                          title="목표 재고 1 증가"
-                        >
-                          +
-                        </button>
-                        <span className="text-[10px] text-slate-500">개</span>
-                      </div>
-                    </td>
-
-                    {/* 최소 발주단위 (MOQ) 인라인 수정 */}
-                    <td className="p-3.5 text-center font-mono">
-                      <div className="inline-flex items-center space-x-1 bg-slate-950 border border-slate-700/80 rounded-xl px-1.5 py-0.5 shadow-inner">
-                        <button
-                          type="button"
-                          onClick={() => handleMinOrderQtyChange(item.barcode, item.minOrderQty - 1)}
-                          className="w-4 h-4 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold text-xs transition-colors"
-                          title="최소발주량 1 감소"
-                        >
-                          -
-                        </button>
-                        <input
-                          type="number"
-                          min="1"
-                          value={item.minOrderQty}
-                          onChange={(e) => handleMinOrderQtyChange(item.barcode, parseInt(e.target.value) || 1)}
-                          className="w-9 text-center font-mono font-bold text-blue-400 bg-transparent text-xs focus:outline-hidden"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleMinOrderQtyChange(item.barcode, item.minOrderQty + 1)}
-                          className="w-4 h-4 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center justify-center font-bold text-xs transition-colors"
-                          title="최소발주량 1 증가"
-                        >
-                          +
-                        </button>
-                        <span className="text-[10px] text-slate-500">개</span>
-                      </div>
-                    </td>
-
-                    {/* 추천 발주 수량 (최소 발주단위 배수로 자동 계산됨) */}
-                    <td className="p-3.5 text-center font-mono">
-                      <div className="flex flex-col items-center">
-                        <span className={item.recommendedQty > 0 ? 'text-emerald-400 font-bold text-sm' : 'text-slate-500'}>
-                          {item.recommendedQty}개
-                        </span>
-                        {item.recommendedQty > 0 && item.minOrderQty > 1 && (
-                          <span className="text-[10px] text-emerald-500/80">
-                            ({item.minOrderQty}개 단위 배수)
-                          </span>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* ★ [요청 2 반영]: 최종 발주 수량 (배수 단위 조절 버튼 + 배수 보정 알림) */}
-                    <td className="p-3.5 text-right">
-                      <div className="flex flex-col items-end space-y-1">
-                        <div className="flex items-center space-x-1.5">
-                          <div className="inline-flex items-center bg-slate-950 border border-slate-700 rounded-xl p-0.5">
-                            <button
-                              type="button"
-                              onClick={() => handleStepQty(item.barcode, item.finalOrderQty, item.minOrderQty, -1)}
-                              disabled={item.finalOrderQty <= 0}
-                              className="w-5 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 text-white font-bold text-xs flex items-center justify-center transition-colors"
-                              title={`${item.minOrderQty}개 감소`}
-                            >
-                              -
-                            </button>
-                            <input
-                              type="number"
-                              min="0"
-                              step={item.minOrderQty}
-                              value={item.finalOrderQty}
-                              onChange={(e) => handleQuantityChange(item.barcode, parseInt(e.target.value) || 0)}
-                              className={`w-16 px-1.5 py-1 text-center font-mono font-bold text-xs bg-transparent focus:outline-hidden ${
-                                item.finalOrderQty > 0 ? 'text-white' : 'text-slate-500'
-                              }`}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleStepQty(item.barcode, item.finalOrderQty, item.minOrderQty, 1)}
-                              className="w-5 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center transition-colors"
-                              title={`${item.minOrderQty}개 증가`}
-                            >
-                              +
-                            </button>
-                          </div>
-                          <span className="text-slate-400 text-xs">개</span>
-                        </div>
-
-                        {item.isBelowMinQty && (
+                        {/* 제외 */}
+                        <td className="px-3 py-3">
                           <button
                             type="button"
-                            onClick={() => handleSnapToMultiple(item.barcode, item.finalOrderQty, item.minOrderQty)}
-                            className="flex items-center space-x-1 bg-amber-950/80 border border-amber-500/60 px-2 py-0.5 rounded-lg text-amber-300 hover:bg-amber-900 transition-colors text-[10px]"
-                            title="클릭하여 최소 발주량의 배수로 올림 보정"
+                            onClick={() => handleRemoveFromOrder(item.barcode)}
+                            aria-label={`${item.productName} 발주 목록에서 제외`}
+                            className="w-9 h-9 rounded-full text-ink-faint hover:text-brick hover:bg-brick-soft flex items-center justify-center transition-colors"
                           >
-                            <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
-                            <span>{item.minOrderQty}개 배수로 맞추기</span>
+                            <Trash2 className="w-4 h-4" />
                           </button>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* 사장님 요청: 발주 리스트에서 특정 상품 즉시 제외/삭제 */}
-                    <td className="p-3.5 text-center">
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveFromOrder(item.barcode)}
-                        className="p-2 rounded-xl bg-slate-800 hover:bg-rose-950/70 text-slate-500 hover:text-rose-400 active:bg-rose-900 border border-slate-700/60 transition-colors"
-                        title="이번 발주 목록에서 제외 (삭제)"
-                      >
-                        <Trash2 className="w-4 h-4 text-rose-400" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
-      </div>
+      </section>
 
-      {/* 모달들 */}
       {showUnmappedModal && (
         <UnmappedGallery
           unmappedAudits={unmappedAudits}
@@ -872,35 +748,35 @@ export const AdminDashboard: React.FC = () => {
         />
       )}
 
-      {/* 알바가 촬영한 실물 사진 크게 보기 모달 */}
+      {/* 사진 크게 보기 */}
       {previewPhotoUrl && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl animate-fade-in">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-              <span className="font-bold text-xs text-white flex items-center">
-                <ImageIcon className="w-4 h-4 text-amber-400 mr-1.5" />
-                알바가 촬영한 실물 사진
+        <div
+          className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-[2px] flex items-center justify-center p-5"
+          onClick={() => setPreviewPhotoUrl(null)}
+        >
+          <div
+            className="bg-surface rounded-2xl max-w-sm w-full overflow-hidden shadow-xl animate-settle"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 h-14 flex items-center justify-between gap-4">
+              <span className="inline-flex items-center gap-2 text-sm text-ink-soft">
+                <ImageIcon className="w-4 h-4 text-ink-faint" />
+                촬영한 사진
               </span>
               <button
                 type="button"
                 onClick={() => setPreviewPhotoUrl(null)}
-                className="text-slate-400 hover:text-white p-1"
+                aria-label="닫기"
+                className="w-9 h-9 -mr-2 rounded-full text-ink-faint hover:text-ink hover:bg-sunken flex items-center justify-center transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-4 bg-black flex items-center justify-center">
-              <img src={previewPhotoUrl} alt="실물 사진" className="max-h-80 w-auto rounded-xl object-contain shadow-lg" />
-            </div>
-            <div className="p-3 bg-slate-950 text-center">
-              <button
-                type="button"
-                onClick={() => setPreviewPhotoUrl(null)}
-                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition-colors"
-              >
-                닫기
-              </button>
-            </div>
+            <img
+              src={previewPhotoUrl}
+              alt="촬영한 상품 사진"
+              className="w-full max-h-96 object-contain bg-sunken"
+            />
           </div>
         </div>
       )}

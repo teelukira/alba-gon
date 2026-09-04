@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BrowserMultiFormatReader } from '@zxing/browser';
-import { Camera, CameraOff, RefreshCw, Zap, Keyboard, Sparkles, Search, ChevronRight, AlertCircle } from 'lucide-react';
+import { CameraOff, Keyboard, Search, ChevronRight } from 'lucide-react';
 import { soundManager } from '../services/sound';
 import { storageService } from '../services/storage';
 import { Product } from '../types';
@@ -12,21 +12,11 @@ interface BarcodeScannerProps {
 
 export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onDetected, isPaused }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [hasCamera, setHasCamera] = useState<boolean>(true);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [manualBarcode, setManualBarcode] = useState('');
   const [matchedProducts, setMatchedProducts] = useState<Product[]>([]);
-  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null);
-
-  // 샘플 바코드 (테스트 및 데모 편의용)
-  const sampleBarcodes = [
-    { code: '8801123724680', name: '마늘퐁닭매콤마늘치킨' },
-    { code: '8801123701445', name: '켄터키핫도그' },
-    { code: '8801227180030', name: '사조고기포자만두' },
-    { code: '8809999999999', name: '미등록신상품' },
-  ];
 
   useEffect(() => {
     if (isPaused) return;
@@ -42,39 +32,36 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onDetected, isPa
 
         const videoInputDevices = await BrowserMultiFormatReader.listVideoInputDevices();
         if (videoInputDevices.length === 0) {
-          setHasCamera(false);
-          setCameraError('사용 가능한 카메라 장치를 찾을 수 없습니다.');
+          setCameraError('카메라를 찾을 수 없습니다.');
           return;
         }
 
-        // 후면 카메라(environment) 우선 선택
-        const selectedDevice = videoInputDevices.find(device => 
-          device.label.toLowerCase().includes('back') || 
-          device.label.toLowerCase().includes('후면') ||
-          device.label.toLowerCase().includes('rear')
-        ) || videoInputDevices[0];
+        // 후면 카메라 우선
+        const selectedDevice =
+          videoInputDevices.find(
+            (device) =>
+              device.label.toLowerCase().includes('back') ||
+              device.label.toLowerCase().includes('후면') ||
+              device.label.toLowerCase().includes('rear')
+          ) || videoInputDevices[0];
 
         if (videoRef.current && active) {
           await codeReader.decodeFromVideoDevice(
             selectedDevice.deviceId,
             videoRef.current,
-            (result, err) => {
+            (result) => {
               if (result && active) {
-                const text = result.getText().trim();
                 soundManager.playScanSuccess();
-                onDetected(text);
-              }
-              if (err && !(err.name === 'NotFoundException')) {
-                // Ignore typical frame decode misses
+                onDetected(result.getText().trim());
               }
             }
           );
         }
       } catch (err: unknown) {
         if (active) {
-          setHasCamera(false);
-          const errorMessage = err instanceof Error ? err.message : '카메라 권한을 허용해주세요.';
-          setCameraError(errorMessage);
+          setCameraError(
+            err instanceof Error ? err.message : '카메라 권한을 허용해주세요.'
+          );
         }
       }
     };
@@ -84,24 +71,20 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onDetected, isPa
     return () => {
       active = false;
       setIsScanning(false);
-      // 스트림 정지
       if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach((track) => track.stop());
         videoRef.current.srcObject = null;
       }
     };
-  }, [isPaused, facingMode, onDetected]);
+  }, [isPaused, onDetected]);
 
-  // 사장님 요청: 바코드 마지막 4~5자리 실시간 패턴 매칭
+  // 바코드 뒷자리 또는 상품명으로 실시간 검색
   useEffect(() => {
     const trimmed = manualBarcode.trim();
-    if (trimmed.length >= 2) {
-      const results = storageService.searchProductsByPattern(trimmed, 8);
-      setMatchedProducts(results);
-    } else {
-      setMatchedProducts([]);
-    }
+    setMatchedProducts(
+      trimmed.length >= 2 ? storageService.searchProductsByPattern(trimmed, 8) : []
+    );
   }, [manualBarcode]);
 
   const handleSelectProduct = (p: Product) => {
@@ -116,7 +99,6 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onDetected, isPa
     const query = manualBarcode.trim();
     if (!query) return;
 
-    // 만약 드롭다운 결과 중 정확히 일치하거나 1개만 매칭된 경우 바로 선택
     if (matchedProducts.length === 1) {
       handleSelectProduct(matchedProducts[0]);
       return;
@@ -128,177 +110,112 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({ onDetected, isPa
     setMatchedProducts([]);
   };
 
-  const handleSampleClick = (code: string) => {
-    soundManager.playScanSuccess();
-    onDetected(code);
-  };
-
-  // 바코드 텍스트에서 검색어 부분 하이라이트 렌더링 헬퍼
+  // 검색어와 일치하는 자리를 굵게
   const renderHighlightedBarcode = (barcode: string, query: string) => {
     const q = query.trim();
-    if (!q) return <span>{barcode}</span>;
-
-    const idx = barcode.lastIndexOf(q);
-    if (idx === -1) return <span>{barcode}</span>;
-
-    const prefix = barcode.substring(0, idx);
-    const match = barcode.substring(idx, idx + q.length);
-    const suffix = barcode.substring(idx + q.length);
+    const idx = q ? barcode.lastIndexOf(q) : -1;
+    if (idx === -1) return <span className="tabular text-ink-faint">{barcode}</span>;
 
     return (
-      <span className="font-mono">
-        <span className="text-slate-400">{prefix}</span>
-        <span className="text-amber-400 font-bold underline decoration-amber-400/60 bg-amber-500/20 px-0.5 rounded">{match}</span>
-        <span className="text-slate-400">{suffix}</span>
+      <span className="tabular text-ink-faint">
+        {barcode.substring(0, idx)}
+        <span className="font-semibold text-ink">
+          {barcode.substring(idx, idx + q.length)}
+        </span>
+        {barcode.substring(idx + q.length)}
       </span>
     );
   };
 
   return (
-    <div className="relative bg-black rounded-3xl overflow-hidden shadow-xl border border-slate-800">
-      {/* 카메라 뷰파인더 */}
-      <div className="relative aspect-4/3 sm:aspect-16/9 bg-slate-950 flex items-center justify-center overflow-hidden">
+    <div className="space-y-3">
+      {/* 뷰파인더 */}
+      <div className="relative aspect-4/3 bg-sunken rounded-2xl overflow-hidden">
         <video
           ref={videoRef}
-          className={`w-full h-full object-cover ${isPaused ? 'opacity-30 blur-xs' : 'opacity-100'} transition-all`}
+          className={`w-full h-full object-cover transition-opacity ${
+            isPaused ? 'opacity-40' : 'opacity-100'
+          }`}
           playsInline
           muted
         />
 
-        {/* 조준선 레이저 가이드 애니메이션 */}
-        {!isPaused && isScanning && (
-          <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center p-6">
-            <div className="relative w-64 h-40 border-2 border-emerald-500/60 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              {/* 모서리 강조선 */}
-              <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-emerald-400 rounded-tl-lg" />
-              <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-emerald-400 rounded-tr-lg" />
-              <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-emerald-400 rounded-bl-lg" />
-              <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-emerald-400 rounded-br-lg" />
-
-              {/* 스캔 레이저 빔 */}
-              <div className="w-full h-0.5 bg-emerald-400 shadow-sm shadow-emerald-400 animate-pulse" />
-              
-              <span className="absolute -bottom-7 text-[11px] font-semibold text-emerald-300 bg-black/60 px-3 py-1 rounded-full backdrop-blur-xs">
-                바코드를 사각형 안에 비춰주세요
-              </span>
-            </div>
+        {!isPaused && isScanning && !cameraError && (
+          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+            <div className="w-3/5 h-1/3 rounded-xl ring-2 ring-white/70 shadow-[0_0_0_100vmax_rgba(46,42,37,0.28)]" />
           </div>
         )}
 
-        {/* 카메라 에러 또는 비권한 시 안내 */}
         {cameraError && (
-          <div className="absolute inset-0 bg-slate-900/90 flex flex-col items-center justify-center p-6 text-center text-white">
-            <CameraOff className="w-10 h-10 text-rose-400 mb-2" />
-            <p className="font-bold text-sm mb-1">카메라를 불러올 수 없습니다</p>
-            <p className="text-xs text-slate-400 mb-4 max-w-xs">{cameraError}</p>
-            <p className="text-xs text-blue-400">아래 직접 입력창이나 빠른 테스트 버튼을 사용하세요.</p>
+          <div className="absolute inset-0 bg-sunken flex flex-col items-center justify-center gap-2 p-6 text-center">
+            <CameraOff className="w-7 h-7 text-ink-faint" />
+            <p className="text-sm text-ink-soft">카메라를 열 수 없습니다</p>
+            <p className="text-[13px] text-ink-faint leading-relaxed break-keep">
+              아래에 바코드 뒷자리나 상품명을 입력해 주세요
+            </p>
           </div>
         )}
       </div>
 
-      {/* 하단 보조 컨트롤 바 & 패턴 매칭 드롭다운 영역 */}
-      <div className="relative p-3 bg-slate-900/95 border-t border-slate-800 space-y-2.5">
-        
-        {/* 바코드 끝자리 패턴 매칭 팁 */}
-        <div className="flex items-center justify-between text-[11px] text-slate-400 px-0.5">
-          <span className="flex items-center text-emerald-400 font-semibold">
-            <Sparkles className="w-3.5 h-3.5 mr-1 text-emerald-400" />
-            빠른 패턴 검색
-          </span>
-          <span className="text-slate-400">바코드 끝 4~5자리만 쳐도 뜹니다</span>
-        </div>
-
-        {/* 직접 바코드 번호 입력창 */}
-        <form onSubmit={handleManualSubmit} className="relative flex space-x-1.5">
+      {/* 직접 입력 */}
+      <div className="relative">
+        <form onSubmit={handleManualSubmit} className="flex gap-2">
           <div className="relative flex-1">
-            <Keyboard className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            <Keyboard className="w-4 h-4 text-ink-faint absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              inputMode="text"
               value={manualBarcode}
               onChange={(e) => setManualBarcode(e.target.value)}
-              placeholder="바코드 뒷 4~5자리 또는 상품명 (예: 60205)"
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 font-mono focus:outline-hidden focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+              placeholder="바코드 뒷자리 또는 상품명"
+              aria-label="바코드 또는 상품명 입력"
+              className="w-full h-12 pl-10 pr-4 rounded-full bg-surface border border-line text-[15px] text-ink placeholder:text-ink-faint focus:outline-none focus:border-sage-300 transition-colors"
             />
           </div>
           <button
             type="submit"
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors shadow-xs shrink-0"
+            className="h-12 px-5 rounded-full bg-sunken hover:bg-line text-sm font-medium text-ink-soft shrink-0 transition-colors"
           >
             입력
           </button>
         </form>
 
-        {/* 사장님 요청 핵심: 바코드 뒷 4~5자리 패턴 매칭 드롭다운 리스트 */}
+        {/* 일치하는 상품 */}
         {manualBarcode.trim().length >= 2 && (
-          <div className="absolute left-3 right-3 bottom-full mb-2 bg-slate-900/98 backdrop-blur-md border border-slate-700 rounded-2xl shadow-2xl overflow-hidden z-50 max-h-64 flex flex-col">
-            <div className="px-3.5 py-2 bg-slate-800/80 border-b border-slate-700/80 flex items-center justify-between text-[11px] text-slate-400">
-              <span className="flex items-center font-bold text-white">
-                <Search className="w-3.5 h-3.5 mr-1 text-emerald-400" />
-                일치하는 상품 목록 ({matchedProducts.length}건)
-              </span>
-              <span className="text-emerald-400 text-[10px]">터치 시 즉시 수량 입력!</span>
-            </div>
-
-            <div className="overflow-y-auto divide-y divide-slate-800/60 scrollbar-none">
-              {matchedProducts.length > 0 ? (
-                matchedProducts.map((p) => (
-                  <button
-                    key={p.barcode}
-                    type="button"
-                    onClick={() => handleSelectProduct(p)}
-                    className="w-full px-3.5 py-2.5 text-left flex items-center justify-between hover:bg-slate-800 active:bg-emerald-950/40 transition-colors group"
-                  >
-                    <div className="min-w-0 pr-2">
-                      <p className="text-xs font-bold text-white group-hover:text-emerald-300 truncate">
-                        {p.name}
-                      </p>
-                      <div className="flex items-center space-x-2 text-[11px] mt-0.5">
-                        {renderHighlightedBarcode(p.barcode, manualBarcode)}
-                        {p.category && (
-                          <span className="px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 text-[10px]">
-                            {p.category}
-                          </span>
-                        )}
-                        <span className="text-slate-400 font-medium">최소 {p.minOrderQty}개</span>
-                      </div>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-emerald-400 shrink-0" />
-                  </button>
-                ))
-              ) : (
-                <div className="p-4 text-center space-y-1.5">
-                  <div className="w-8 h-8 rounded-full bg-rose-500/20 text-rose-400 mx-auto flex items-center justify-center">
-                    <AlertCircle className="w-4 h-4" />
-                  </div>
-                  <p className="text-xs font-bold text-white">등록되지 않은 바코드입니다</p>
-                  <p className="text-[11px] text-slate-400">
-                    우측 <span className="text-emerald-400 font-bold">[입력]</span> 버튼을 누르시면 <br />
-                    <span className="text-amber-300 font-semibold">실물 사진 촬영 모달 📸</span>로 자동 이동합니다.
-                  </p>
-                </div>
-              )}
-            </div>
+          <div className="absolute left-0 right-0 bottom-full mb-2 bg-surface border border-line rounded-2xl shadow-lg overflow-hidden z-40 animate-settle">
+            {matchedProducts.length > 0 ? (
+              <ul className="max-h-72 overflow-y-auto divide-y divide-line">
+                {matchedProducts.map((p) => (
+                  <li key={p.barcode}>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectProduct(p)}
+                      className="w-full px-4 py-3 text-left flex items-center gap-3 hover:bg-sunken transition-colors"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[15px] text-ink leading-snug break-keep">
+                          {p.name}
+                        </span>
+                        <span className="block mt-0.5 text-[13px]">
+                          {renderHighlightedBarcode(p.barcode, manualBarcode)}
+                          <span className="text-ink-faint"> · 최소 {p.minOrderQty}개</span>
+                        </span>
+                      </span>
+                      <ChevronRight className="w-4 h-4 text-ink-faint shrink-0" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="px-4 py-5 text-center">
+                <Search className="w-5 h-5 text-ink-faint mx-auto mb-2" />
+                <p className="text-sm text-ink">등록되지 않은 바코드입니다</p>
+                <p className="mt-1 text-[13px] text-ink-faint leading-relaxed break-keep">
+                  입력을 누르면 사진 촬영으로 넘어갑니다
+                </p>
+              </div>
+            )}
           </div>
         )}
-
-        {/* 빠른 테스트용 샘플 바코드 버튼들 */}
-        <div className="flex items-center space-x-1.5 overflow-x-auto pb-0.5 text-[11px] scrollbar-none">
-          <span className="text-slate-500 flex items-center shrink-0 font-medium mr-1">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400 mr-1" />
-            빠른스캔:
-          </span>
-          {sampleBarcodes.map((s) => (
-            <button
-              key={s.code}
-              type="button"
-              onClick={() => handleSampleClick(s.code)}
-              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-blue-600 text-slate-300 hover:text-white shrink-0 font-medium transition-colors border border-slate-700/60"
-            >
-              {s.name}
-            </button>
-          ))}
-        </div>
       </div>
     </div>
   );

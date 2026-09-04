@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Camera, AlertCircle, Check, X, RefreshCw, Upload } from 'lucide-react';
+import { Camera, Check, X, RefreshCw } from 'lucide-react';
 import { soundManager } from '../services/sound';
 
 interface PhotoCaptureModalProps {
@@ -56,8 +56,7 @@ export const PhotoCaptureModal: React.FC<PhotoCaptureModalProps> = ({
     const ctx = canvas.getContext('2d');
     if (ctx) {
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      setCapturedPhoto(dataUrl);
+      setCapturedPhoto(canvas.toDataURL('image/jpeg', 0.8));
     }
   };
 
@@ -81,58 +80,57 @@ export const PhotoCaptureModal: React.FC<PhotoCaptureModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-xs p-4 animate-fade-in">
-      <div className="bg-slate-900 border border-amber-500/40 rounded-3xl w-full max-w-sm p-5 text-white shadow-2xl">
-        <div className="flex justify-between items-start mb-3">
-          <div className="flex items-center space-x-2 text-amber-400">
-            <AlertCircle className="w-5 h-5 shrink-0" />
-            <div>
-              <h3 className="font-bold text-sm">조회되지 않는 미등록 바코드</h3>
-              <p className="text-[11px] text-amber-300 font-mono">바코드: {barcode}</p>
-            </div>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink/30 backdrop-blur-[2px] p-0 sm:p-5">
+      <div className="bg-surface rounded-t-3xl sm:rounded-3xl w-full max-w-sm shadow-xl animate-rise">
+        <div className="p-6 pb-4 flex justify-between items-start gap-4">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold text-ink">처음 보는 상품입니다</h2>
+            <p className="mt-1 text-[13px] text-ink-faint tabular">{barcode}</p>
+            <p className="mt-2 text-sm text-ink-soft leading-relaxed break-keep">
+              상품 앞면이 보이게 찍어 두면 나중에 이름을 등록할 수 있습니다.
+            </p>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white p-1">
+          <button
+            onClick={onClose}
+            aria-label="닫기"
+            className="w-9 h-9 -mr-2 -mt-1 rounded-full text-ink-faint hover:text-ink hover:bg-sunken flex items-center justify-center shrink-0 transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <p className="text-xs text-slate-300 mb-3 leading-relaxed">
-          마스터 목록에 없는 상품입니다. 사장님이 확인 후 매핑하실 수 있도록 <strong className="text-emerald-400">상품 앞면(이름/실물)</strong> 사진을 촬영해주세요!
-        </p>
+        <div className="px-6">
+          <div className="relative aspect-square bg-sunken rounded-2xl overflow-hidden flex items-center justify-center">
+            {capturedPhoto ? (
+              <img src={capturedPhoto} alt="촬영한 상품" className="w-full h-full object-cover" />
+            ) : streamActive ? (
+              <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
+            ) : (
+              <div className="text-center px-6">
+                <Camera className="w-7 h-7 text-ink-faint mx-auto mb-2" />
+                <p className="text-sm text-ink-soft">카메라를 열 수 없습니다</p>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="mt-3 h-10 px-4 rounded-full bg-surface text-sm font-medium text-ink-soft hover:text-ink transition-colors"
+                >
+                  앨범에서 선택
+                </button>
+              </div>
+            )}
 
-        {/* 촬영 뷰파인더 또는 촬영된 사진 미리보기 */}
-        <div className="relative aspect-square bg-black rounded-2xl overflow-hidden border border-slate-700 mb-4 flex items-center justify-center">
-          {capturedPhoto ? (
-            <img src={capturedPhoto} alt="Captured" className="w-full h-full object-cover" />
-          ) : streamActive ? (
-            <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
-          ) : (
-            <div className="text-center p-6">
-              <Camera className="w-12 h-12 text-slate-600 mx-auto mb-2" />
-              <p className="text-xs text-slate-400">카메라를 켤 수 없습니다.</p>
+            {capturedPhoto && (
               <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="mt-3 px-3 py-1.5 rounded-lg bg-slate-800 text-xs font-semibold text-blue-400 hover:bg-slate-700"
+                onClick={() => setCapturedPhoto(null)}
+                className="absolute top-3 right-3 h-9 px-4 rounded-full bg-surface/90 backdrop-blur-sm text-[13px] font-medium text-ink-soft hover:text-ink inline-flex items-center gap-1.5 transition-colors"
               >
-                사진 앨범에서 선택
+                <RefreshCw className="w-3.5 h-3.5" />
+                다시 찍기
               </button>
-            </div>
-          )}
-
-          {/* 다시 찍기 버튼 */}
-          {capturedPhoto && (
-            <button
-              onClick={() => setCapturedPhoto(null)}
-              className="absolute top-3 right-3 px-3 py-1.5 rounded-full bg-black/70 hover:bg-black/90 text-xs text-white font-semibold backdrop-blur-xs flex items-center space-x-1"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              <span>다시 찍기</span>
-            </button>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* 사진 셔터 및 컨트롤 */}
         <input
           ref={fileInputRef}
           type="file"
@@ -142,34 +140,38 @@ export const PhotoCaptureModal: React.FC<PhotoCaptureModalProps> = ({
           className="hidden"
         />
 
-        {!capturedPhoto ? (
-          <div className="flex space-x-2">
+        <div className="p-6">
+          {!capturedPhoto ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onSkip}
+                className="h-12 px-5 rounded-full text-sm font-medium text-ink-soft hover:bg-sunken shrink-0 transition-colors"
+              >
+                건너뛰기
+              </button>
+              <button
+                type="button"
+                onClick={
+                  streamActive ? handleCaptureSnapshot : () => fileInputRef.current?.click()
+                }
+                className="flex-1 h-12 rounded-full bg-sage hover:bg-sage-deep text-white text-sm font-medium inline-flex items-center justify-center gap-2 transition-colors"
+              >
+                <Camera className="w-4 h-4" />
+                촬영
+              </button>
+            </div>
+          ) : (
             <button
               type="button"
-              onClick={onSkip}
-              className="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 text-xs font-semibold transition-colors"
+              onClick={handleConfirm}
+              className="w-full h-12 rounded-full bg-sage hover:bg-sage-deep text-white text-sm font-medium inline-flex items-center justify-center gap-2 transition-colors"
             >
-              사진 없이 건너뛰기
+              <Check className="w-4 h-4" />
+              저장하고 수량 입력
             </button>
-            <button
-              type="button"
-              onClick={streamActive ? handleCaptureSnapshot : () => fileInputRef.current?.click()}
-              className="flex-2 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 active:bg-amber-600 text-slate-950 text-xs font-bold transition-colors flex items-center justify-center space-x-1.5 shadow-lg shadow-amber-500/20"
-            >
-              <Camera className="w-4 h-4" />
-              <span>사진 찰칵 촬영</span>
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={handleConfirm}
-            className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors flex items-center justify-center space-x-1.5 shadow-lg shadow-emerald-600/30"
-          >
-            <Check className="w-4 h-4" />
-            <span>이 사진으로 저장하고 수량 입력</span>
-          </button>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
